@@ -14,51 +14,31 @@ positions. Bottom row: the Python animation sketches the firmware ports.
 
 ## Using the badge
 
+**[docs/USAGE.md](docs/USAGE.md)** is the full guide: touch rules, the menu,
+every game, the name tag and the emulator. The short version:
+
 | | |
 |---|---|
 | **Hold T3** | open the menu (from anywhere, also mid-game) |
 | Menu | T1 / T4 previous / next, **T3** select, hold T3 close |
-| Name, hotel, animations | T1 / T4 previous / next item, T3 brightness |
-| Games | demo mode until you touch T1, T2 or T4; then the game has the pads |
-| **Hold T1 + T4, 3 s** | reboot into the USB boot ROM for flashing (an arrow runs down first) |
-| USB power | a battery gauge shows while charging, until the next tap |
-
-Menu items: **NAME** (name tag, the start screen), **HACKER HOTEL**,
-RIPPLE, GALAXY, HEART, LIFE, FIRE, TWINKLE, **SNAKE**, **STARTRIS**,
-**BREAKOUT**, **PONG**, **FLAPPY**, **STAR CHASE**, and LIGHT (brightness,
-from night mode to full).
-
-| Game | Pads |
-|---|---|
-| Snake | T1 turn left, T4 turn right |
-| Startris | T1 / T4 move (hold to repeat), T3 rotate, T2 drop |
-| Breakout | T1 / T4 move the paddle (hold) |
-| Pong (you vs the badge, to 5) | T1 up, T4 down (hold) |
-| Flappy | T1, T2 or T4 flap |
-| Star Chase | T1, T2 or T4 stop the light beside the green arm |
-
-Startris uses T2 only to drop; the rest works without it (see "T2 may not
-work" below).
+| Name, hotel, animations | T1 / T4 previous / next screen, T3 brightness |
+| Games | play themselves until you touch T1, T2 or T4 |
+| **Hold T1 + T4, 3 s** | reboot into the USB boot ROM for flashing |
 
 The name is set at build time: `BADGE_NAME="ANNE JAN" cargo build --release`
-(C: `make NAME="ANNE JAN"`). Letters, digits and ` !'*-.:?/#@`.
+(C: `make -C c NAME="ANNE JAN"`).
 
 ## Emulator
 
-Play with the badge on the PC. Either firmware is built as a shared library
-(the app, menu, games and animations; interface in `tools/emu/badge_emu.h`)
-and `tools/emu/emu.py` draws it live on the board render:
+Either firmware can be built as a shared library and played on the PC:
 
 ```sh
 make -C c emu && python3 tools/emu/emu.py c                     # C firmware
 (cd tools/fwsim && cargo build --release) && python3 tools/emu/emu.py rust
 ```
 
-Keys `1` `2` `3` `4` or `←` `↓` `↑` `→` are the pads T1–T4 (or click them),
-`C` toggles USB power, `R` resets. Touches go through the same press / tap /
-hold / chord rules as `touch.rs`, so holding T3 opens the menu and holding
-T1 + T4 for 3 s reboots into the boot ROM. Needs Python with tkinter,
-numpy, scipy and Pillow.
+Keys `1`–`4` or the arrows are the pads; see
+[docs/USAGE.md](docs/USAGE.md#emulator).
 
 ## Hardware
 

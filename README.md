@@ -52,6 +52,10 @@ animations are ports of these. Run `python3 tools/sim/hh2027.py [ripple fire ...
 the output goes to `previews/`. It needs numpy, scipy, Pillow and ffmpeg, and
 `--refresh` re-reads the board (kicad-cli + pcbnew).
 
+`c/` has a port of the same firmware to plain C (register level, no WCH
+peripheral library), for comparison. It is about half the size: 8.1 KB of
+flash against 15.2 KB. See `c/README.md` for why.
+
 Controls: T1 next, T2 previous, T3 brightness, T4 restart. Hold any pad to
 toggle night mode. While charging, a battery gauge shows until the next tap.
 
@@ -88,6 +92,9 @@ toggle night mode. While charging, a battery gauge shows until the next tap.
 - **T2 may not work.** T2 is on ADC channel 11. The datasheet says channels 3, 7,
   11 and 15 are missing on chips whose lot number has 0 as the 5th digit from
   the end. Moving T2 to another TouchKey-capable pin avoids this.
+- **Unbonded pads.** WCH's SystemInit pulls up the pads that the LQFP64
+  package does not bond out (PC6–PC9, PC12, PC13, PC20); if they float they
+  draw current. ch32-hal does not do this, so `main.rs` does it.
 - **No battery gauge.** The board has no battery-voltage sense, so the
   firmware can show *that* the battery charges but not *how full* it is.
 - **No USB driver yet.** ch32-hal has no USB driver for the CH643. The chip

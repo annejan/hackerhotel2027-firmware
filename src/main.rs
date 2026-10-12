@@ -61,11 +61,28 @@ async fn charge_monitor(chrg: Input<'static>) {
     }
 }
 
+/// Pads that exist on the die but are not bonded out in the LQFP64 package
+/// float and draw current unless pulled up. WCH's own SystemInit does this
+/// (GPIO_IPD_Unused); ch32-hal does not. CH643Q: PC6..PC9, PC12, PC13, PC20.
+fn pull_up_unbonded_pads() {
+    use hal::pac::{GPIOC, RCC};
+    RCC.apb2pcenr().modify(|w| w.set_iopcen(true));
+    // input with pull-up = mode nibble 0b1000, pull selected by OUTDR = 1
+    GPIOC.cfglr().modify(|w| w.0 = (w.0 & 0x00FF_FFFF) | 0x8800_0000); // PC6, PC7
+    // CFGHR is not readable on early silicon (WCH keeps a shadow copy), so
+    // write it whole: PC8, PC9, PC12, PC13 pull-up, the rest floating input
+    GPIOC.cfghr().write(|w| w.0 = 0x4488_4488);
+    GPIOC.bshr().write(|w| w.0 = 1 << 6 | 1 << 7 | 1 << 8 | 1 << 9 | 1 << 12 | 1 << 13);
+    GPIOC.cfgxr().modify(|w| w.0 = (w.0 & !(0xF << 16)) | 0x8 << 16); // PC20
+    GPIOC.bsxr().write(|w| w.0 = 1 << 4);
+}
+
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
     let mut config = hal::Config::default();
     config.rcc = hal::rcc::Config::SYSCLK_FREQ_48MHZ_HSI;
     let p = hal::init(config);
+    pull_up_unbonded_pads();
 
     spawner.spawn(charge_monitor(Input::new(p.PB22, Pull::Up)).unwrap());
     spawner.spawn(touch::scan(p.ADC1, p.PC0, p.PC1, p.PC2, p.PC3).unwrap());

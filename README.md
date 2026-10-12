@@ -61,9 +61,10 @@ example with a udev rule:
 
 How the chip gets into the boot ROM (none of this is tested on a CH643 yet):
 
-- **Blank chip**: on the CH32X035, which has the same core and memory map as the CH643 (ch32-data uses one memory file for both) and a boot
-  layout, the boot ROM always runs when the application flash is empty.
-  If the CH643 does the same, new badges can be flashed straight over USB.
+- **Blank chip**: on the CH32X035 the boot ROM always runs when the
+  application flash is empty. The CH32X035 has the same core and memory map
+  as the CH643 (ch32-data uses one memory file for both). If the CH643 does
+  the same, new badges can be flashed straight over USB.
 - **From firmware**: WCH's `SystemReset_StartMode(Start_Mode_BOOT)` sets
   FLASH_STATR.BOOT_MODE (after the BOOT_MODEKEYR keys), and the next
   software reset starts the boot ROM. Firmware can do this on a touch

@@ -60,7 +60,7 @@ static inline rgb_t rgb_scaled(rgb_t c, uint8_t v)
 
 rgb_t hsv(uint8_t h, uint8_t s, uint8_t v);
 
-/* no libgcc for rv32 here, so no __builtin_popcount */
+/* smaller than libgcc's table-based __popcountsi2 */
 static inline uint32_t popcount32(uint32_t x)
 {
     x = x - ((x >> 1) & 0x55555555u);

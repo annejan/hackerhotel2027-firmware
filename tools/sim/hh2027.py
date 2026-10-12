@@ -9,7 +9,7 @@ background is a KiCad 3D render of the top side, dimmed to look like a dark room
    35 RGB 1515 LEDs    7 per arm
 
 Usage:
-  python3 tools/sim/hh2027.py [--refresh] [anim ...]     (default: all animations)
+  python3 tools/sim/hh2027.py [--refresh] [--out=DIR] [--width=PX] [--no-mp4] [anim ...]
 
 Writes GIFs and MP4s to previews/. The LED positions and the board render are
 cached next to this script, so a normal run needs no KiCad. --refresh
@@ -510,20 +510,28 @@ def save_mp4(frames, path, loops=3):
 
 
 def main(args):
-    if "--refresh" in args or not LED_JSON.exists() or not RENDER.exists():
+    opts = dict(a[2:].split("=", 1) if "=" in a else (a[2:], "") for a in args if a.startswith("--"))
+    if "refresh" in opts or not LED_JSON.exists() or not RENDER.exists():
         refresh()
+    out = Path(opts.get("out", OUT))
+    width = int(opts.get("width", S))         # frames are rendered at S, then scaled
     names = [a for a in args if not a.startswith("--")] or list(ANIMS)
     L = Layout()
     R = Renderer(L)
-    OUT.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     for name in names:
         title, sub, fn = ANIMS[name]
         frames = [R.render(m, c, title, sub) for m, c in fn(L)]
-        path = OUT / f"{name}.gif"
+        if width != S:
+            size = (width, round(width * (S + CAP) / S))
+            frames = [f.resize(size, Image.LANCZOS) for f in frames]
+        path = out / f"{name}.gif"
         save_gif(frames, path)
-        save_mp4(frames, path.with_suffix(".mp4"))
-        print(f"{path.name}: {len(frames)} frames, {path.stat().st_size // 1024} KiB "
-              f"(mp4 {path.with_suffix('.mp4').stat().st_size // 1024} KiB)")
+        msg = f"{path.name}: {len(frames)} frames, {path.stat().st_size // 1024} KiB"
+        if "no-mp4" not in opts:
+            save_mp4(frames, path.with_suffix(".mp4"))
+            msg += f" (mp4 {path.with_suffix('.mp4').stat().st_size // 1024} KiB)"
+        print(msg)
 
 
 if __name__ == "__main__":

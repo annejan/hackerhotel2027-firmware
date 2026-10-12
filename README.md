@@ -3,6 +3,13 @@
 Embassy firmware for the Hacker Hotel 2027 starfish badge. It compiles, but it
 has never run on a board.
 
+| | | | |
+|---|---|---|---|
+| ![ripple](docs/anim/ripple.gif) | ![galaxy](docs/anim/galaxy.gif) | ![fire](docs/anim/fire.gif) | ![heartbeat](docs/anim/heartbeat.gif) |
+
+Simulated with `tools/sim/hh2027.py` on a KiCad render of the real board, with
+the real LED positions. The firmware animations are ports of these.
+
 ## Hardware
 
 | | |
@@ -12,13 +19,13 @@ has never run on a board.
 | | 208 mono LEDs in a 17 × 16 grid, 71 mono LEDs on the outline, 35 RGB LEDs (7 per arm) |
 | Touch | T1–T4 on PC0–PC3, TouchKey channels 10–13 |
 | Power | LiPo with XT4054 charger; CHRG on PB22 |
-| Debug | SWIO / SWCK (WCH-LinkE) |
+| Debug | SWIO / SWCK go only to the MCU: no pads, so no WCH-LinkE |
 
 ## Build
 
 ```sh
 cargo build --release            # stable Rust, target riscv32imc-unknown-none-elf
-cargo run --release              # flashes with wlink (WCH-LinkE)
+cargo run --release              # flashes over USB with wchisp, see Flashing
 ```
 
 `src/generated.rs` contains the LED map. It is generated from the KiCad
@@ -34,6 +41,41 @@ checkout next to this repo, or in `$HH27_HW`.
 
 The script follows every LED anode through its series resistor to a PA pin
 and every cathode to a PB pin. It fails if two LEDs share one slot.
+
+## Flashing
+
+The board has no debug pads, so the only way in is USB-C, through the
+CH643's factory boot ROM (3328 bytes of system flash) and
+[wchisp](https://github.com/ch32-rs/wchisp) (`cargo install wchisp`).
+wchisp lists the CH643 with USB and UART ISP support (`devices/0x24-CH643.yaml`).
+USB-C D+/D− go straight to PC17/PC16, the CH643's USB pins.
+
+```sh
+wchisp probe
+wchisp flash target/riscv32imc-unknown-none-elf/release/hh27-starfish
+```
+
+On Linux, give your user access to the boot ROM's USB ID (4348:55e0), for
+example with a udev rule:
+`SUBSYSTEM=="usb", ATTRS{idVendor}=="4348", ATTRS{idProduct}=="55e0", MODE="0666"`.
+
+How the chip gets into the boot ROM (none of this is tested on a CH643 yet):
+
+- **Blank chip**: on the CH32X035, which has the same core and memory map as the CH643 (ch32-data uses one memory file for both) and a boot
+  layout, the boot ROM always runs when the application flash is empty.
+  If the CH643 does the same, new badges can be flashed straight over USB.
+- **From firmware**: WCH's `SystemReset_StartMode(Start_Mode_BOOT)` sets
+  FLASH_STATR.BOOT_MODE (after the BOOT_MODEKEYR keys), and the next
+  software reset starts the boot ROM. Firmware can do this on a touch
+  gesture, which makes updates possible without opening anything.
+- **Pins**: on the CH32X035 the boot ROM runs when PC16 is low and PC17 is
+  high at power-on. The badge has nothing that pulls PC17 high, so this
+  needs a pad or button.
+
+So a firmware that crashes before it can jump to the boot ROM bricks the
+badge, unless the chip also enters the boot ROM by itself. Before
+production, the hardware should get SWIO + GND test pads, and a pad or
+button that pulls PC17 (D+) high at power-on.
 
 ## Structure
 

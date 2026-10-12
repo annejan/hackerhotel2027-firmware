@@ -2,13 +2,13 @@
 #
 #   make            build build/hh27.elf / .bin (fetches the WCH SDK on first run)
 #   make size       section sizes
-#   make flash      flash with wlink (WCH-LinkE)
+#   make flash      flash over USB with wchisp (boot ROM, see ../README.md)
 #
 # Uses only startup, linker script, clock init and register headers from
 # WCH's SDK (github.com/openwch/ch643); no peripheral library, no libc.
 # The SDK is fetched at build time and not committed.
 
-CROSS   ?= riscv64-elf-
+CROSS   ?= riscv-none-elf-
 CC      := $(CROSS)gcc
 OBJCOPY := $(CROSS)objcopy
 SIZE    ?= size
@@ -21,7 +21,8 @@ SDK      := $(WCH)/SRC
 ARCH    := -march=rv32imac_zicsr -mabi=ilp32
 CFLAGS  := $(ARCH) -Os -g -std=gnu11 -Wall -Wextra -ffreestanding \
            -ffunction-sections -fdata-sections -fno-common -msmall-data-limit=8 \
-           -Isrc -I$(SDK)/Core -I$(SDK)/Peripheral/inc -I$(WCH)/TOUCHKEY/TKey/User
+           -Isrc -I$(SDK)/Core -I$(SDK)/Peripheral/inc -I$(WCH)/TOUCHKEY/TKey/User \
+           $(CFLAGS_EXTRA)
 LDFLAGS := $(ARCH) -nostartfiles -nostdlib -T $(SDK)/Ld/Link.ld \
            -Wl,--gc-sections -Wl,-Map=build/hh27.map -Wl,--print-memory-usage
 
@@ -48,7 +49,7 @@ build/%.S.o: %.S | build vendor/ch643
 	$(CC) $(ARCH) -x assembler-with-cpp -c $< -o $@
 
 build/hh27.elf: $(OBJS)
-	$(CC) $(LDFLAGS) $^ -o $@
+	$(CC) $(LDFLAGS) $^ -lgcc -o $@
 
 build/hh27.bin: build/hh27.elf
 	$(OBJCOPY) -O binary $< $@
@@ -60,7 +61,7 @@ size: build/hh27.elf
 	$(SIZE) $<
 
 flash: build/hh27.bin
-	wlink flash build/hh27.elf
+	wchisp flash build/hh27.elf
 
 clean:
 	rm -rf build

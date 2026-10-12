@@ -1,5 +1,5 @@
-/* The only libc functions the compiler may emit calls to. Built without a
- * C library: the installed riscv64-elf toolchain has no rv32 newlib. */
+/* The only libc functions the compiler may emit calls to. The firmware is
+ * linked without a C library (-nostdlib) to keep it small. */
 #include <stddef.h>
 
 void *memset(void *dst, int c, size_t n)

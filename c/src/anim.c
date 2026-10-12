@@ -2,7 +2,8 @@
  *
  * Controls: T1 next, T2 previous, T3 brightness, T4 restart/reseed,
  * hold any pad for night mode, hold T1 + T4 for 3 s to reboot into the USB
- * boot ROM. While charging, the battery gauge shows until the next tap. */
+ * boot ROM. While charging, the battery gauge shows until the next tap.
+ * Games take over the pads while one is being played (see snake.c). */
 #include <stdbool.h>
 #include <string.h>
 #include "anim.h"
@@ -10,6 +11,7 @@
 #include "events.h"
 #include "font.h"
 #include "frame.h"
+#include "snake.h"
 
 static const uint8_t BRIGHTNESS[] = {24, 64, 140, 255};
 #define LEVELS (sizeof BRIGHTNESS)
@@ -17,7 +19,7 @@ static const uint8_t BRIGHTNESS[] = {24, 64, 140, 255};
 static const char MESSAGE[] = "HACKER HOTEL 2027 * ";
 #define MESSAGE_LEN (sizeof MESSAGE - 1)
 
-enum { RIPPLE, GALAXY, HEARTBEAT, SCROLLER, LIFE, FIRE, TWINKLE, MODES };
+enum { RIPPLE, GALAXY, HEARTBEAT, SCROLLER, LIFE, FIRE, TWINKLE, SNAKE, MODES };
 
 static struct {
     uint8_t mode, level;
@@ -323,6 +325,7 @@ static void switch_to(int mode)
     p.t = 0;
     life_init();
     memset(heat, 0, sizeof heat);
+    snake_reset();
 }
 
 void anim_init(void)
@@ -332,7 +335,12 @@ void anim_init(void)
 
 void anim_event(event_t ev, uint8_t arg)
 {
+    bool gaming = p.mode == SNAKE && !p.show_charge;
+    if (gaming && snake_event(ev, arg))
+        return;
     switch (ev) {
+    case EV_PRESS:
+        break;
     case EV_TAP:
         p.show_charge = false;
         switch (arg) {
@@ -346,7 +354,9 @@ void anim_event(event_t ev, uint8_t arg)
         p.night = !p.night;
         break;
     case EV_CHARGING:
-        p.charging = p.show_charge = arg;
+        p.charging = arg;
+        /* don't cover a game that is being played */
+        p.show_charge = arg && !(gaming && snake_playing());
         break;
     case EV_BOOTLOADER:
         p.boot_frames = FPS;
@@ -383,5 +393,6 @@ void anim_render(void)
     case LIFE: life_render(t); break;
     case FIRE: fire(); break;
     case TWINKLE: twinkle(t); break;
+    case SNAKE: snake_render(); break;
     }
 }

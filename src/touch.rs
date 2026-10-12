@@ -90,7 +90,7 @@ pub async fn scan(
 
     let mut ticker = Ticker::every(Duration::from_millis(POLL_MS));
     loop {
-        for (pad, ch) in pads.iter_mut().zip(chans.iter_mut()) {
+        for (i, (pad, ch)) in pads.iter_mut().zip(chans.iter_mut()).enumerate() {
             let raw = measure(&mut adc, ch);
             let base = pad.baseline >> 4;
             // A finger adds capacitance; which way the count moves is not
@@ -102,6 +102,7 @@ pub async fn scan(
                 if delta > PRESS_DELTA {
                     pad.down = true;
                     pad.ticks = 0;
+                    let _ = EVENTS.try_send(Event::Press(i as u8));
                 } else {
                     // follow slow drift (temperature, humidity) while untouched
                     pad.baseline = pad.baseline - (pad.baseline >> 5) + (raw << 4 >> 5);

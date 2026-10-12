@@ -76,6 +76,7 @@ void touch_poll(void)
             if (delta > PRESS_DELTA) {
                 pads[i].down = true;
                 pads[i].ticks = 0;
+                anim_event(EV_PRESS, (uint8_t)i);
             } else {
                 /* follow slow drift while untouched */
                 pads[i].baseline = pads[i].baseline - (pads[i].baseline >> 5) + ((raw << 4) >> 5);

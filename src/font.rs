@@ -23,3 +23,12 @@ pub fn glyph(c: char) -> [u8; WIDTH] {
         _ => [0; WIDTH],
     }
 }
+
+/// 3x5 digits for scores: five rows, bit 2 = left column.
+pub fn digit3x5(d: u8) -> [u8; 5] {
+    const D: [[u8; 5]; 10] = [
+        [7, 5, 5, 5, 7], [2, 6, 2, 2, 7], [7, 1, 7, 4, 7], [7, 1, 7, 1, 7], [5, 5, 7, 1, 1],
+        [7, 4, 7, 1, 7], [7, 4, 7, 5, 7], [7, 1, 2, 2, 2], [7, 5, 7, 5, 7], [7, 5, 7, 1, 7],
+    ];
+    D[d as usize % 10]
+}

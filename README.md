@@ -85,10 +85,15 @@ button that pulls PC17 (D+) high at power-on.
 | `main.rs` | Embassy main: render loop at 30 fps, event channel, CHRG monitor task |
 | `touch.rs` | TouchKey polling task: baseline tracking, tap and hold events |
 | `anim.rs` | Animations ported from `tools/sim/hh2027.py`: ripple, galaxy, heartbeat, scroller, life, fire, twinkle, charging |
+| `snake.rs` | Snake: plays itself until T4 starts a game |
 | `frame.rs` | Frame buffer, integer HSV, sin table helpers, RNG |
 | `ledpwm.rs` | CH643 LEDPWM driver: **mostly guesswork, see below** |
 | `bootloader.rs` | Reboot into the USB boot ROM (T1 + T4 chord) |
 | `generated.rs` | LED map, polar coordinates, gamma and sine tables (generated) |
+
+`tools/sim/games.py` does the same for game mock-ups (Snake, Startris,
+Breakout, Pong, Flappy, Star Chase), played by a small scripted AI, with
+the touch pads shown in the caption.
 
 `tools/sim/hh2027.py` renders animation previews (GIF + MP4) on a KiCad 3D
 render of the real board, with the real LED positions. The firmware
@@ -97,11 +102,12 @@ the output goes to `previews/`. It needs numpy, scipy, Pillow and ffmpeg, and
 `--refresh` re-reads the board (kicad-cli + pcbnew).
 
 `c/` has a port of the same firmware to plain C (register level, no WCH
-peripheral library), for comparison. It is about half the size: 8.5 KB of
-flash against 16.0 KB. See `c/README.md` for why.
+peripheral library), for comparison. It is about half the size: 11.1 KB of
+flash against 19.8 KB. See `c/README.md` for why.
 
 Controls: T1 next, T2 previous, T3 brightness, T4 restart. Hold any pad to
-toggle night mode. Hold **T1 + T4 for 3 s** to reboot into the USB boot ROM
+toggle night mode. The last mode is **Snake**: it plays itself until you tap
+T4; in a game T1 turns left and T4 turns right. Hold **T1 + T4 for 3 s** to reboot into the USB boot ROM
 for flashing (an arrow runs down the grid first). While charging, a battery gauge shows until the next tap.
 
 ## What is solid and what is guessed

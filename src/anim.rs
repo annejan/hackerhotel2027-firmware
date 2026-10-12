@@ -3,10 +3,12 @@
 //! Controls: T1 next, T2 previous, T3 brightness, T4 restart/reseed,
 //! hold any pad for night mode, hold T1 + T4 for 3 s to reboot into the USB
 //! boot ROM. While charging, the battery gauge shows until the next tap.
+//! Games take over the pads while one is being played (see snake.rs).
 
 use crate::font;
 use crate::frame::{hsv, mono_slots, polar, scale, sin8, Frame, Rgb, Rng};
 use crate::generated::{EDGE, GRID, GRID_H, GRID_W, NONE, RGB};
+use crate::snake::Snake;
 use crate::Event;
 
 pub const FPS: u32 = 30;
@@ -24,9 +26,10 @@ enum Mode {
     Life,
     Fire,
     Twinkle,
+    Snake,
 }
 
-const MODES: [Mode; 7] = [
+const MODES: [Mode; 8] = [
     Mode::Ripple,
     Mode::Galaxy,
     Mode::Heartbeat,
@@ -34,6 +37,7 @@ const MODES: [Mode; 7] = [
     Mode::Life,
     Mode::Fire,
     Mode::Twinkle,
+    Mode::Snake,
 ];
 
 pub struct Player {
@@ -46,12 +50,14 @@ pub struct Player {
     rng: Rng,
     life: Life,
     fire: Fire,
+    snake: Snake,
 }
 
 impl Player {
     pub fn new() -> Self {
         let mut rng = Rng::new(0x2027_5EA5);
         let life = Life::new(&mut rng);
+        let snake = Snake::new(&mut rng);
         Self {
             mode: 0,
             t: 0,
@@ -62,11 +68,17 @@ impl Player {
             rng,
             life,
             fire: Fire::new(),
+            snake,
         }
     }
 
     pub fn handle(&mut self, ev: Event) {
+        let gaming = matches!(MODES[self.mode], Mode::Snake) && !self.show_charge;
+        if gaming && self.snake.handle(ev, &mut self.rng) {
+            return;
+        }
         match ev {
+            Event::Press(_) => {}
             Event::Tap(pad) => {
                 self.show_charge = false;
                 match pad {
@@ -79,7 +91,8 @@ impl Player {
             Event::Hold(_) => self.night = !self.night,
             Event::Charging(c) => {
                 self.charging = c;
-                self.show_charge = c;
+                // don't cover a game that is being played
+                self.show_charge = c && !(gaming && self.snake.playing());
             }
             Event::Bootloader => {} // handled by the main loop
         }
@@ -90,6 +103,7 @@ impl Player {
         self.t = 0;
         self.life = Life::new(&mut self.rng);
         self.fire = Fire::new();
+        self.snake = Snake::new(&mut self.rng);
     }
 
     pub fn brightness(&self) -> u8 {
@@ -114,6 +128,7 @@ impl Player {
             Mode::Life => self.life.render(f, t, &mut self.rng),
             Mode::Fire => self.fire.render(f, &mut self.rng),
             Mode::Twinkle => twinkle(f, t),
+            Mode::Snake => self.snake.render(f, &mut self.rng),
         }
     }
 }
@@ -303,7 +318,8 @@ const fn grid_mask() -> [u32; GRID_H] {
     m
 }
 
-const MASK: [u32; GRID_H] = grid_mask();
+/// Grid LEDs per row, one bit per column (the octagon).
+pub(crate) const MASK: [u32; GRID_H] = grid_mask();
 
 impl Life {
     fn new(rng: &mut Rng) -> Self {

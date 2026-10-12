@@ -12,7 +12,7 @@
 //!
 //! Tasks:
 //!   main loop      renders the current animation at FPS and hands frames to the display
-//!   touch::scan    polls the touch pads, sends Tap/Hold/Bootloader events
+//!   touch::scan    polls the touch pads, sends Press/Tap/Hold/Bootloader events
 //!   charge_monitor watches CHRG, sends Charging events
 #![no_std]
 #![no_main]
@@ -23,6 +23,7 @@ mod font;
 mod frame;
 mod generated;
 mod ledpwm;
+mod snake;
 mod touch;
 
 use ch32_hal as hal;
@@ -38,7 +39,9 @@ use frame::Frame;
 /// Things that happen to the badge, consumed by the render loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
-    /// Short touch on pad 0..=3 (T1..T4)
+    /// Pad 0..=3 (T1..T4) touched; sent on touch-down, for games
+    Press(u8),
+    /// Short touch on pad 0..=3, sent on release
     Tap(u8),
     /// Touch held for `touch::HOLD_MS` on pad 0..=3
     Hold(u8),

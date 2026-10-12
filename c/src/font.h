@@ -27,3 +27,13 @@ static inline const uint8_t *font_glyph(char c)
     default: return blank;
     }
 }
+
+/* 3x5 digits for scores: five rows, bit 2 = left column */
+static inline const uint8_t *font_digit3x5(uint8_t d)
+{
+    static const uint8_t D[10][5] = {
+        {7, 5, 5, 5, 7}, {2, 6, 2, 2, 7}, {7, 1, 7, 4, 7}, {7, 1, 7, 1, 7}, {5, 5, 7, 1, 1},
+        {7, 4, 7, 1, 7}, {7, 4, 7, 5, 7}, {7, 1, 2, 2, 2}, {7, 5, 7, 5, 7}, {7, 5, 7, 1, 7},
+    };
+    return D[d % 10];
+}

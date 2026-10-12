@@ -16,7 +16,17 @@ use hal::adc::{Adc, AdcChannel, AnyAdcChannel, SampleTime};
 use hal::peripherals::{ADC1, PC0, PC1, PC2, PC3};
 use hal::Peri;
 
+use core::sync::atomic::{AtomicU8, Ordering};
+
 use crate::{Event, EVENTS};
+
+/// Pads touched right now, bit n = pad Tn+1 (load/store only: no CAS on
+/// this core without the A extension in the target).
+static HELD: AtomicU8 = AtomicU8::new(0);
+
+pub fn held() -> u8 {
+    HELD.load(Ordering::Relaxed)
+}
 
 const PADS: usize = 4;
 const POLL_MS: u64 = 10;
@@ -114,6 +124,8 @@ pub async fn scan(
                 pad.ticks = pad.ticks.saturating_add(1);
             }
         }
+
+        HELD.store(pads.iter().enumerate().fold(0, |m, (i, p)| m | (p.down as u8) << i), Ordering::Relaxed);
 
         if pads.iter().filter(|p| p.down).count() > 1 {
             pads.iter_mut().filter(|p| p.down).for_each(|p| p.chord = true);

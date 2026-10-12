@@ -30,6 +30,8 @@ static struct {
     uint16_t ticks;
 } pads[PADS];
 
+volatile uint8_t touch_held;
+
 static uint32_t measure(int ch)
 {
     ADC1->RSQR3 = (uint32_t)ch; /* SQ1 = channel, sequence length 1 */
@@ -76,7 +78,7 @@ void touch_poll(void)
             if (delta > PRESS_DELTA) {
                 pads[i].down = true;
                 pads[i].ticks = 0;
-                anim_event(EV_PRESS, (uint8_t)i);
+                app_event(EV_PRESS, (uint8_t)i);
             } else {
                 /* follow slow drift while untouched */
                 pads[i].baseline = pads[i].baseline - (pads[i].baseline >> 5) + ((raw << 4) >> 5);
@@ -90,19 +92,24 @@ void touch_poll(void)
         down += pads[i].down;
     }
 
+    uint8_t held = 0;
+    for (int i = 0; i < PADS; i++)
+        held |= (uint8_t)(pads[i].down << i);
+    touch_held = held;
+
     for (int i = 0; i < PADS; i++) {
         if (down > 1 && pads[i].down)
             pads[i].chord = true;
         if (pads[i].released) {
             if (!pads[i].chord && pads[i].ticks < HOLD_TICKS)
-                anim_event(EV_TAP, (uint8_t)i);
+                app_event(EV_TAP, (uint8_t)i);
             pads[i].chord = false;
         } else if (pads[i].down && !pads[i].chord && pads[i].ticks == HOLD_TICKS) {
-            anim_event(EV_HOLD, (uint8_t)i);
+            app_event(EV_HOLD, (uint8_t)i);
         }
     }
 
     const uint16_t a = pads[TOUCH_BOOT_A].ticks, b = pads[TOUCH_BOOT_B].ticks;
     if (pads[TOUCH_BOOT_A].down && pads[TOUCH_BOOT_B].down && (a < b ? a : b) == BOOT_TICKS)
-        anim_event(EV_BOOTLOADER, 0);
+        app_event(EV_BOOTLOADER, 0);
 }

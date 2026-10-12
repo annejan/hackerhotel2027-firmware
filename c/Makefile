@@ -26,11 +26,16 @@ CFLAGS  := $(ARCH) -Os -g -std=gnu11 -Wall -Wextra -ffreestanding \
 LDFLAGS := $(ARCH) -nostartfiles -nostdlib -T $(SDK)/Ld/Link.ld \
            -Wl,--gc-sections -Wl,-Map=build/hh27.map -Wl,--print-memory-usage
 
-SRCS := $(wildcard src/*.c) $(WCH)/TOUCHKEY/TKey/User/system_ch643.c
+# the name tag: make NAME="ANNE JAN"
+ifneq ($(NAME),)
+CFLAGS += -DBADGE_NAME='"$(NAME)"'
+endif
+
+SRCS := $(wildcard src/*.c src/games/*.c) $(WCH)/TOUCHKEY/TKey/User/system_ch643.c
 ASMS := $(SDK)/Startup/startup_ch643.S
 OBJS := $(patsubst %,build/%.o,$(notdir $(SRCS) $(ASMS)))
 
-vpath %.c src $(WCH)/TOUCHKEY/TKey/User
+vpath %.c src src/games $(WCH)/TOUCHKEY/TKey/User
 vpath %.S $(SDK)/Startup
 
 all: build/hh27.bin size

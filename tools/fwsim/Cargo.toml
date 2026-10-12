@@ -1,0 +1,11 @@
+[package]
+name = "fwsim"
+version = "0.1.0"
+edition = "2021"
+description = "Runs the firmware's hardware-independent modules on the PC"
+publish = false
+
+[workspace]
+
+[profile.dev]
+opt-level = 1   # keeps overflow and bounds checks, runs fast enough for soak tests

@@ -1,0 +1,3 @@
+[build]
+# the firmware's .cargo/config.toml targets the badge; this runs on the PC
+target = "host-tuple"

@@ -68,6 +68,23 @@ static inline uint32_t popcount32(uint32_t x)
     return (((x + (x >> 4)) & 0x0F0F0F0Fu) * 0x01010101u) >> 24;
 }
 
+/* Grid LEDs per row, one bit per column (the octagon); set by frame_init() */
+extern uint32_t MASK[GRID_H];
+void frame_init(void);
+
+/* is (row, col) one of the grid LEDs? */
+static inline int on_grid(int r, int c)
+{
+    return r >= 0 && r < GRID_H && c >= 0 && c < GRID_W && (MASK[r] >> c & 1);
+}
+
+/* 5x7 text with its left edge at column x (clipped), top row `row` */
+void draw_text(const char *s, int x, int row, uint8_t v);
+/* text that fits is centred; longer text scrolls at 10 columns per second */
+void draw_label(const char *s, int row, uint32_t t, uint32_t fps, uint8_t v);
+/* number in 3x5 digits, centred, top row `row` */
+void draw_number(uint16_t n, int row, uint8_t v);
+
 /* xorshift32, good enough for sparkles and fire */
 uint32_t rng_next(void);
 static inline uint8_t rng_byte(void) { return (uint8_t)(rng_next() >> 24); }

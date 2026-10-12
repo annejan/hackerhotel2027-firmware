@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include "ch643.h"
 #include "anim.h"
+#include "app.h"
 #include "events.h"
 #include "ledpwm.h"
 #include "touch.h"
@@ -39,7 +40,7 @@ int main(void)
 
     ledpwm_init();
     touch_init();
-    anim_init();
+    app_init();
 
     uint32_t next_touch = ticks(), next_chrg = ticks(), next_frame = ticks();
     int charging = -1;
@@ -49,11 +50,11 @@ int main(void)
         if (due(&next_chrg, 500 * tick_ms)) {
             int c = !(GPIOB->INDR & (1u << CHRG_PIN));
             if (c != charging)
-                anim_event(EV_CHARGING, (uint8_t)(charging = c));
+                app_event(EV_CHARGING, (uint8_t)(charging = c));
         }
         if (due(&next_frame, 1000 * tick_ms / FPS)) {
-            anim_render();
-            ledpwm_show(anim_brightness());
+            app_render(touch_held);
+            ledpwm_show(app_brightness());
         }
     }
 }

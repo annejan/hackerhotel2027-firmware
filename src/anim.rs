@@ -1,145 +1,18 @@
 //! Animations, ported from tools/sim/hh2027.py to integer maths.
-//!
-//! Controls: T1 next, T2 previous, T3 brightness, T4 restart/reseed,
-//! hold any pad for night mode, hold T1 + T4 for 3 s to reboot into the USB
-//! boot ROM. While charging, the battery gauge shows until the next tap.
-//! Games take over the pads while one is being played (see snake.rs).
+//! Which one runs, and the controls, live in app.rs.
 
-use crate::font;
-use crate::frame::{hsv, mono_slots, polar, scale, sin8, Frame, Rgb, Rng};
-use crate::generated::{EDGE, GRID, GRID_H, GRID_W, NONE, RGB};
-use crate::snake::Snake;
-use crate::Event;
+use crate::frame::{hsv, mono_slots, polar, scale, sin8, Frame, Rgb, Rng, MASK};
+use crate::generated::{EDGE, GRID_H, GRID_W, RGB};
 
 pub const FPS: u32 = 30;
 
-const BRIGHTNESS: [u8; 4] = [24, 64, 140, 255];
-const NIGHT: u8 = 6;
-const MESSAGE: &str = "HACKER HOTEL 2027 * ";
-
-#[derive(Clone, Copy)]
-enum Mode {
-    Ripple,
-    Galaxy,
-    Heartbeat,
-    Scroller,
-    Life,
-    Fire,
-    Twinkle,
-    Snake,
-}
-
-const MODES: [Mode; 8] = [
-    Mode::Ripple,
-    Mode::Galaxy,
-    Mode::Heartbeat,
-    Mode::Scroller,
-    Mode::Life,
-    Mode::Fire,
-    Mode::Twinkle,
-    Mode::Snake,
-];
-
-pub struct Player {
-    mode: usize,
-    t: u32,
-    level: usize,
-    night: bool,
-    charging: bool,
-    show_charge: bool,
-    rng: Rng,
-    life: Life,
-    fire: Fire,
-    snake: Snake,
-}
-
-impl Player {
-    pub fn new() -> Self {
-        let mut rng = Rng::new(0x2027_5EA5);
-        let life = Life::new(&mut rng);
-        let snake = Snake::new(&mut rng);
-        Self {
-            mode: 0,
-            t: 0,
-            level: 1,
-            night: false,
-            charging: false,
-            show_charge: false,
-            rng,
-            life,
-            fire: Fire::new(),
-            snake,
-        }
-    }
-
-    pub fn handle(&mut self, ev: Event) {
-        let gaming = matches!(MODES[self.mode], Mode::Snake) && !self.show_charge;
-        if gaming && self.snake.handle(ev, &mut self.rng) {
-            return;
-        }
-        match ev {
-            Event::Press(_) => {}
-            Event::Tap(pad) => {
-                self.show_charge = false;
-                match pad {
-                    0 => self.switch(self.mode + 1),
-                    1 => self.switch(self.mode + MODES.len() - 1),
-                    2 => self.level = (self.level + 1) % BRIGHTNESS.len(),
-                    _ => self.switch(self.mode),
-                }
-            }
-            Event::Hold(_) => self.night = !self.night,
-            Event::Charging(c) => {
-                self.charging = c;
-                // don't cover a game that is being played
-                self.show_charge = c && !(gaming && self.snake.playing());
-            }
-            Event::Bootloader => {} // handled by the main loop
-        }
-    }
-
-    fn switch(&mut self, mode: usize) {
-        self.mode = mode % MODES.len();
-        self.t = 0;
-        self.life = Life::new(&mut self.rng);
-        self.fire = Fire::new();
-        self.snake = Snake::new(&mut self.rng);
-    }
-
-    pub fn brightness(&self) -> u8 {
-        if self.night {
-            NIGHT
-        } else {
-            BRIGHTNESS[self.level]
-        }
-    }
-
-    pub fn render(&mut self, f: &mut Frame) {
-        let t = self.t;
-        self.t = self.t.wrapping_add(1);
-        if self.show_charge {
-            return charging(f, t);
-        }
-        match MODES[self.mode] {
-            Mode::Ripple => ripple(f, t),
-            Mode::Galaxy => galaxy(f, t),
-            Mode::Heartbeat => heartbeat(f, t),
-            Mode::Scroller => scroller(f, t),
-            Mode::Life => self.life.render(f, t, &mut self.rng),
-            Mode::Fire => self.fire.render(f, &mut self.rng),
-            Mode::Twinkle => twinkle(f, t),
-            Mode::Snake => self.snake.render(f, &mut self.rng),
-        }
-    }
-}
-
 /// Animation phase in 1/256 turns, advancing `per_s` units per second.
 #[inline]
-fn phase(t: u32, per_s: u32) -> u8 {
+pub fn phase(t: u32, per_s: u32) -> u8 {
     (t.wrapping_mul(per_s) / FPS) as u8
 }
 
-fn ripple(f: &mut Frame, t: u32) {
+pub fn ripple(f: &mut Frame, t: u32) {
     let w = phase(t, 171); // one ring every 1.5 s
     for s in mono_slots() {
         let (r, _) = polar(s);
@@ -155,7 +28,7 @@ fn ripple(f: &mut Frame, t: u32) {
     }
 }
 
-fn galaxy(f: &mut Frame, t: u32) {
+pub fn galaxy(f: &mut Frame, t: u32) {
     let w = phase(t, 85); // one turn every 3 s
     let arm = |r: u8, a: u8| (a as u32 * 5 + r as u32 * 5 / 2) as u8;
     for s in mono_slots() {
@@ -172,7 +45,7 @@ fn galaxy(f: &mut Frame, t: u32) {
 }
 
 /// Double beat every 2.2 s, travelling outward at 120 mm/s.
-fn heartbeat(f: &mut Frame, t: u32) {
+pub fn heartbeat(f: &mut Frame, t: u32) {
     let ms = t * 1000 / FPS;
     let beat = |r: u8| -> u8 {
         let x = (ms + 2200 * 4 - r as u32 * 2) % 2200; // 2 ms per 0.25 mm
@@ -188,34 +61,7 @@ fn heartbeat(f: &mut Frame, t: u32) {
     }
 }
 
-fn scroller(f: &mut Frame, t: u32) {
-    let cols = MESSAGE.len() * (font::WIDTH + 1);
-    let off = (t * 10 / FPS) as usize; // 10 columns per second
-    for c in 0..GRID_W {
-        let col = (off + c) % cols;
-        let (ch, cx) = (col / (font::WIDTH + 1), col % (font::WIDTH + 1));
-        let bits = if cx < font::WIDTH {
-            font::glyph(MESSAGE.as_bytes()[ch] as char)[cx]
-        } else {
-            0
-        };
-        for r in 0..font::HEIGHT {
-            if bits >> r & 1 != 0 {
-                f.grid(4 + r, c, 255);
-            }
-        }
-    }
-    for (j, &s) in EDGE.iter().enumerate() {
-        f.set(s, if (j + off) % 4 == 0 { 140 } else { 10 });
-    }
-    let w = phase(t, 128);
-    for (i, l) in RGB.iter().enumerate() {
-        let hue = (l.rank * 36).wrapping_add(l.arm * 51).wrapping_sub(w);
-        f.rgb(i, hsv(hue, 255, 200));
-    }
-}
-
-fn twinkle(f: &mut Frame, t: u32) {
+pub fn twinkle(f: &mut Frame, t: u32) {
     for s in mono_slots() {
         // per-LED speed and phase from a cheap hash of the slot
         let h = (s as u32).wrapping_mul(2_654_435_761);
@@ -237,7 +83,7 @@ fn twinkle(f: &mut Frame, t: u32) {
 
 /// Battery gauge on the grid, arms fill up. There is no battery voltage
 /// sense on the board, so it only shows *that* it charges, not how full.
-fn charging(f: &mut Frame, t: u32) {
+pub fn charging(f: &mut Frame, t: u32) {
     let ms = (t * 1000 / FPS) % 4000;
     let (r0, r1, c0, c1) = (4, 11, 2, 13);
     for c in c0..=c1 {
@@ -296,33 +142,15 @@ pub fn usb_boot(f: &mut Frame, t: u32) {
 // ------------------------------------------------------------------- life ---
 
 /// Conway's Game of Life on the 17 x 16 grid, one bit per cell.
-struct Life {
+pub struct Life {
     cells: [u32; GRID_H],
     prev: [u32; GRID_H],
     seen: [u32; 2],
 }
 
-const fn grid_mask() -> [u32; GRID_H] {
-    let mut m = [0u32; GRID_H];
-    let mut r = 0;
-    while r < GRID_H {
-        let mut c = 0;
-        while c < GRID_W {
-            if GRID[r][c] != NONE {
-                m[r] |= 1 << c;
-            }
-            c += 1;
-        }
-        r += 1;
-    }
-    m
-}
-
-/// Grid LEDs per row, one bit per column (the octagon).
-pub(crate) const MASK: [u32; GRID_H] = grid_mask();
 
 impl Life {
-    fn new(rng: &mut Rng) -> Self {
+    pub fn new(rng: &mut Rng) -> Self {
         let mut l = Self { cells: [0; GRID_H], prev: [0; GRID_H], seen: [0; 2] };
         l.seed(rng);
         l
@@ -374,7 +202,7 @@ impl Life {
         }
     }
 
-    fn render(&mut self, f: &mut Frame, t: u32, rng: &mut Rng) {
+    pub fn render(&mut self, f: &mut Frame, t: u32, rng: &mut Rng) {
         let gen_frames = FPS / 5; // 5 generations per second
         let k = t % gen_frames;
         if k == 0 && t > 0 {
@@ -414,16 +242,16 @@ impl Life {
 // ------------------------------------------------------------------- fire ---
 
 /// Doom-style fire: heat rises from two rows below the grid and cools.
-struct Fire {
+pub struct Fire {
     heat: [[u8; GRID_W]; GRID_H + 2],
 }
 
 impl Fire {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { heat: [[0; GRID_W]; GRID_H + 2] }
     }
 
-    fn render(&mut self, f: &mut Frame, rng: &mut Rng) {
+    pub fn render(&mut self, f: &mut Frame, rng: &mut Rng) {
         let h = GRID_H + 2;
         for x in 0..GRID_W {
             self.heat[h - 1][x] = 128 + rng.byte() / 2;

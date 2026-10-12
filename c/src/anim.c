@@ -1,40 +1,11 @@
-/* Animations, same as the Rust firmware's anim.rs.
- *
- * Controls: T1 next, T2 previous, T3 brightness, T4 restart/reseed,
- * hold any pad for night mode, hold T1 + T4 for 3 s to reboot into the USB
- * boot ROM. While charging, the battery gauge shows until the next tap.
- * Games take over the pads while one is being played (see snake.c). */
+/* Animations, same as the Rust firmware's anim.rs. Which one runs, and
+ * the controls, live in app.c. */
 #include <stdbool.h>
 #include <string.h>
 #include "anim.h"
-#include "bootloader.h"
-#include "events.h"
-#include "font.h"
 #include "frame.h"
-#include "snake.h"
 
-static const uint8_t BRIGHTNESS[] = {24, 64, 140, 255};
-#define LEVELS (sizeof BRIGHTNESS)
-#define NIGHT 6
-static const char MESSAGE[] = "HACKER HOTEL 2027 * ";
-#define MESSAGE_LEN (sizeof MESSAGE - 1)
-
-enum { RIPPLE, GALAXY, HEARTBEAT, SCROLLER, LIFE, FIRE, TWINKLE, SNAKE, MODES };
-
-static struct {
-    uint8_t mode, level;
-    uint32_t t;
-    bool night, charging, show_charge;
-    uint8_t boot_frames; /* > 0: showing the USB boot screen, then reboot */
-} p = {.level = 1};
-
-/* animation phase in 1/256 turns, advancing per_s units per second */
-static inline uint8_t phase(uint32_t t, uint32_t per_s)
-{
-    return (uint8_t)(t * per_s / FPS);
-}
-
-static void ripple(uint32_t t)
+void anim_ripple(uint32_t t)
 {
     uint8_t w = phase(t, 171); /* one ring every 1.5 s */
     for (int i = 0; i < MONO_SPAN; i++) {
@@ -58,7 +29,7 @@ static inline uint8_t spiral(uint8_t r, uint8_t a)
     return (uint8_t)(a * 5 + r * 5 / 2);
 }
 
-static void galaxy(uint32_t t)
+void anim_galaxy(uint32_t t)
 {
     uint8_t w = phase(t, 85); /* one turn every 3 s */
     for (int i = 0; i < MONO_SPAN; i++) {
@@ -86,7 +57,7 @@ static uint8_t beat(uint32_t ms, uint8_t r)
     return v > 255 ? 255 : (uint8_t)v;
 }
 
-static void heartbeat(uint32_t t)
+void anim_heartbeat(uint32_t t)
 {
     uint32_t ms = t * 1000 / FPS;
     for (int i = 0; i < MONO_SPAN; i++) {
@@ -100,26 +71,7 @@ static void heartbeat(uint32_t t)
     }
 }
 
-static void scroller(uint32_t t)
-{
-    const uint32_t cols = MESSAGE_LEN * (FONT_W + 1);
-    uint32_t off = t * 10 / FPS; /* 10 columns per second */
-    for (int c = 0; c < GRID_W; c++) {
-        uint32_t col = (off + c) % cols;
-        uint32_t cx = col % (FONT_W + 1);
-        uint8_t bits = cx < FONT_W ? font_glyph(MESSAGE[col / (FONT_W + 1)])[cx] : 0;
-        for (int r = 0; r < FONT_H; r++)
-            if (bits >> r & 1)
-                fb_grid(4 + r, c, 255);
-    }
-    for (int j = 0; j < EDGE_LEDS; j++)
-        fb[EDGE[j]] = (j + off) % 4 == 0 ? 140 : 10;
-    uint8_t w = phase(t, 128);
-    for (int i = 0; i < RGB_LEDS; i++)
-        fb_rgb(i, hsv((uint8_t)(RGB[i].rank * 36 + RGB[i].arm * 51) - w, 255, 200));
-}
-
-static void twinkle(uint32_t t)
+void anim_twinkle(uint32_t t)
 {
     for (int i = 0; i < MONO_SPAN; i++) {
         slot_t s = mono_at(i);
@@ -142,7 +94,7 @@ static void twinkle(uint32_t t)
 
 /* battery gauge; the board has no battery voltage sense, so it only shows
  * that it charges, not how full */
-static void charging(uint32_t t)
+void anim_charging(uint32_t t)
 {
     uint32_t ms = t * 1000 / FPS % 4000;
     const int r0 = 4, r1 = 11, c0 = 2, c1 = 13;
@@ -172,7 +124,7 @@ static void charging(uint32_t t)
 
 /* shown for a second before rebooting into the USB boot ROM: an arrow
  * moving down the grid (towards the USB port), arms filling blue */
-static void usb_boot(uint32_t t)
+void anim_usb_boot(uint32_t t)
 {
     int shift = (int)(t * 4 / FPS); /* 4 rows per second */
     for (int r = 0; r < 9; r++)
@@ -192,25 +144,19 @@ static void usb_boot(uint32_t t)
 
 /* Conway's Game of Life on the 17 x 16 grid, one bit per cell */
 static struct {
-    uint32_t cells[GRID_H], prev[GRID_H], mask[GRID_H], seen[2];
+    uint32_t cells[GRID_H], prev[GRID_H], seen[2];
 } life;
 
 static void life_seed(void)
 {
     /* ~34% alive: (a & b) is 25%, OR (c & d & e) adds another ~9% */
     for (int r = 0; r < GRID_H; r++)
-        life.cells[r] = ((rng_next() & rng_next()) | (rng_next() & rng_next() & rng_next())) & life.mask[r];
+        life.cells[r] = ((rng_next() & rng_next()) | (rng_next() & rng_next() & rng_next())) & MASK[r];
     memcpy(life.prev, life.cells, sizeof life.cells);
 }
 
-static void life_init(void)
+void life_init(void)
 {
-    for (int r = 0; r < GRID_H; r++) {
-        life.mask[r] = 0;
-        for (int c = 0; c < GRID_W; c++)
-            if (GRID[r][c] != SLOT_NONE)
-                life.mask[r] |= 1u << c;
-    }
     life.seen[0] = life.seen[1] = 0;
     life_seed();
 }
@@ -240,7 +186,7 @@ static void life_step(void)
             if (n == 3 || (alive && n == 2))
                 next[r] |= 1u << c;
         }
-        next[r] &= life.mask[r];
+        next[r] &= MASK[r];
     }
     memcpy(life.prev, life.cells, sizeof life.cells);
     memcpy(life.cells, next, sizeof next);
@@ -258,7 +204,7 @@ static void life_step(void)
     }
 }
 
-static void life_render(uint32_t t)
+void life_render(uint32_t t)
 {
     const uint32_t gen_frames = FPS / 5; /* 5 generations per second */
     uint32_t k = t % gen_frames;
@@ -290,7 +236,12 @@ static void life_render(uint32_t t)
 /* Doom-style fire: heat rises from two rows below the grid and cools */
 static uint8_t heat[GRID_H + 2][GRID_W];
 
-static void fire(void)
+void fire_reset(void)
+{
+    memset(heat, 0, sizeof heat);
+}
+
+void fire_render(void)
 {
     const int h = GRID_H + 2;
     for (int x = 0; x < GRID_W; x++)
@@ -314,85 +265,5 @@ static void fire(void)
         uint8_t down = 255 - sin8(angle(RGB[i].r) + 64);
         uint8_t v = scale8(down, 100 + rng_byte() / 2);
         fb_rgb(i, rgb_scaled((rgb_t){255, (uint8_t)(40 + v / 4), 4}, v));
-    }
-}
-
-/* ----------------------------------------------------------- player --- */
-
-static void switch_to(int mode)
-{
-    p.mode = (uint8_t)((mode + MODES) % MODES);
-    p.t = 0;
-    life_init();
-    memset(heat, 0, sizeof heat);
-    snake_reset();
-}
-
-void anim_init(void)
-{
-    switch_to(RIPPLE);
-}
-
-void anim_event(event_t ev, uint8_t arg)
-{
-    bool gaming = p.mode == SNAKE && !p.show_charge;
-    if (gaming && snake_event(ev, arg))
-        return;
-    switch (ev) {
-    case EV_PRESS:
-        break;
-    case EV_TAP:
-        p.show_charge = false;
-        switch (arg) {
-        case 0: switch_to(p.mode + 1); break;
-        case 1: switch_to(p.mode - 1); break;
-        case 2: p.level = (uint8_t)((p.level + 1) % LEVELS); break;
-        default: switch_to(p.mode); break;
-        }
-        break;
-    case EV_HOLD:
-        p.night = !p.night;
-        break;
-    case EV_CHARGING:
-        p.charging = arg;
-        /* don't cover a game that is being played */
-        p.show_charge = arg && !(gaming && snake_playing());
-        break;
-    case EV_BOOTLOADER:
-        p.boot_frames = FPS;
-        break;
-    }
-}
-
-uint8_t anim_brightness(void)
-{
-    uint8_t b = p.night ? NIGHT : BRIGHTNESS[p.level];
-    /* make sure the boot screen is visible even in night mode */
-    return p.boot_frames && b < 64 ? 64 : b;
-}
-
-void anim_render(void)
-{
-    uint32_t t = p.t++;
-    memset(fb, 0, sizeof fb);
-    if (p.boot_frames) {
-        if (--p.boot_frames == 0)
-            reboot_to_boot_rom();
-        usb_boot(FPS - 1 - p.boot_frames);
-        return;
-    }
-    if (p.show_charge) {
-        charging(t);
-        return;
-    }
-    switch (p.mode) {
-    case RIPPLE: ripple(t); break;
-    case GALAXY: galaxy(t); break;
-    case HEARTBEAT: heartbeat(t); break;
-    case SCROLLER: scroller(t); break;
-    case LIFE: life_render(t); break;
-    case FIRE: fire(); break;
-    case TWINKLE: twinkle(t); break;
-    case SNAKE: snake_render(); break;
     }
 }

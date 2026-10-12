@@ -9,5 +9,5 @@ typedef enum {
     EV_BOOTLOADER, /* T1 + T4 held for TOUCH_BOOT_MS: reboot into the USB boot ROM */
 } event_t;
 
-/* consumed by the animation player */
-void anim_event(event_t ev, uint8_t arg);
+/* consumed by the app (app.c) */
+void app_event(event_t ev, uint8_t arg);

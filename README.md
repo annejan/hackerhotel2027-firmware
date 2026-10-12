@@ -5,10 +5,43 @@ has never run on a board.
 
 | | | | |
 |---|---|---|---|
+| ![hotel](docs/fw/hotel.gif) | ![startris](docs/fw/startris.gif) | ![breakout](docs/fw/breakout.gif) | ![star chase](docs/fw/chase.gif) |
 | ![ripple](docs/anim/ripple.gif) | ![galaxy](docs/anim/galaxy.gif) | ![fire](docs/anim/fire.gif) | ![heartbeat](docs/anim/heartbeat.gif) |
 
-Simulated with `tools/sim/hh2027.py` on a KiCad render of the real board, with
-the real LED positions. The firmware animations are ports of these.
+Top row: recorded from the firmware itself, running on the PC
+(`tools/fwsim`), drawn on a KiCad render of the board with the real LED
+positions. Bottom row: the Python animation sketches the firmware ports.
+
+## Using the badge
+
+| | |
+|---|---|
+| **Hold T3** | open the menu (from anywhere, also mid-game) |
+| Menu | T1 / T4 previous / next, **T3** select, hold T3 close |
+| Name, hotel, animations | T1 / T4 previous / next item, T3 brightness |
+| Games | demo mode until you touch T1, T2 or T4; then the game has the pads |
+| **Hold T1 + T4, 3 s** | reboot into the USB boot ROM for flashing (an arrow runs down first) |
+| USB power | a battery gauge shows while charging, until the next tap |
+
+Menu items: **NAME** (name tag, the start screen), **HACKER HOTEL**,
+RIPPLE, GALAXY, HEART, LIFE, FIRE, TWINKLE, **SNAKE**, **STARTRIS**,
+**BREAKOUT**, **PONG**, **FLAPPY**, **STAR CHASE**, and LIGHT (brightness,
+from night mode to full).
+
+| Game | Pads |
+|---|---|
+| Snake | T1 turn left, T4 turn right |
+| Startris | T1 / T4 move (hold to repeat), T3 rotate, T2 drop |
+| Breakout | T1 / T4 move the paddle (hold) |
+| Pong (you vs the badge, to 5) | T1 up, T4 down (hold) |
+| Flappy | T1, T2 or T4 flap |
+| Star Chase | T1, T2 or T4 stop the light beside the green arm |
+
+Startris uses T2 only to drop; the rest works without it (see "T2 may not
+work" below).
+
+The name is set at build time: `BADGE_NAME="ANNE JAN" cargo build --release`
+(C: `make NAME="ANNE JAN"`). Letters, digits and ` !'*-.:?/#@`.
 
 ## Hardware
 
@@ -83,32 +116,52 @@ button that pulls PC17 (D+) high at power-on.
 | File | What |
 |---|---|
 | `main.rs` | Embassy main: render loop at 30 fps, event channel, CHRG monitor task |
-| `touch.rs` | TouchKey polling task: baseline tracking, tap and hold events |
-| `anim.rs` | Animations ported from `tools/sim/hh2027.py`: ripple, galaxy, heartbeat, scroller, life, fire, twinkle, charging |
-| `snake.rs` | Snake: plays itself until T4 starts a game |
-| `frame.rs` | Frame buffer, integer HSV, sin table helpers, RNG |
+| `touch.rs` | TouchKey polling task: press / tap / hold events, held pads, the T1 + T4 chord |
+| `app.rs` | Menu, the list of screens, brightness, charging overlay |
+| `nametag.rs` | Name tag and Hacker Hotel 2027 screens |
+| `anim.rs` | Animations: ripple, galaxy, heartbeat, life, fire, twinkle, charging |
+| `game.rs` | Game shell: demo mode, play, crash, score screen |
+| `games/` | Snake, Startris, Breakout, Pong, Flappy, Star Chase |
+| `frame.rs` | Frame buffer, text and digits, integer HSV, sine, RNG |
+| `font.rs` | 5x7 font (` `..`Z`), 3x5 digits |
 | `ledpwm.rs` | CH643 LEDPWM driver: **mostly guesswork, see below** |
-| `bootloader.rs` | Reboot into the USB boot ROM (T1 + T4 chord) |
+| `bootloader.rs` | Reboot into the USB boot ROM |
 | `generated.rs` | LED map, polar coordinates, gamma and sine tables (generated) |
 
-`tools/sim/games.py` does the same for game mock-ups (Snake, Startris,
-Breakout, Pong, Flappy, Star Chase), played by a small scripted AI, with
-the touch pads shown in the caption.
-
-`tools/sim/hh2027.py` renders animation previews (GIF + MP4) on a KiCad 3D
-render of the real board, with the real LED positions. The firmware
-animations are ports of these. Run `python3 tools/sim/hh2027.py [ripple fire ...]`;
-the output goes to `previews/`. It needs numpy, scipy, Pillow and ffmpeg, and
-`--refresh` re-reads the board (kicad-cli + pcbnew).
-
 `c/` has a port of the same firmware to plain C (register level, no WCH
-peripheral library), for comparison. It is about half the size: 11.1 KB of
-flash against 19.8 KB. See `c/README.md` for why.
+peripheral library), for comparison; see `c/README.md` and the sizes below.
 
-Controls: T1 next, T2 previous, T3 brightness, T4 restart. Hold any pad to
-toggle night mode. The last mode is **Snake**: it plays itself until you tap
-T4; in a game T1 turns left and T4 turns right. Hold **T1 + T4 for 3 s** to reboot into the USB boot ROM
-for flashing (an arrow runs down the grid first). While charging, a battery gauge shows until the next tap.
+## Tools
+
+| | |
+|---|---|
+| `tools/fwsim` | Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random touches in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
+| `tools/sim/fwgif.py` | Turns a `fwsim record` into a GIF on the board render |
+| `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
+| `tools/sim/games.py` | The first game mock-ups, played by a scripted AI |
+| `tools/gen_layout.py` | LED map from the KiCad board, for Rust and C |
+
+The Python tools need numpy, scipy, Pillow and ffmpeg.
+
+## Size
+
+Everything above (name tag, hotel screen, menu, 6 animations, 6 games, the
+USB boot gesture), measured:
+
+| | Flash (of 62 KB) | Static RAM (of 20 KB) |
+|---|---|---|
+| C, GCC 15 `-Os` | **20.3 KB** (32%) | 4.7 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` | 28.8 KB (46%) | 2.4 KB + stack |
+| Rust + Embassy, `opt-level = "s"` (default) | **31.8 KB** (51%) | 2.4 KB + stack |
+
+Roughly where the C flash goes: animations 4.0 KB, Startris 2.5 KB, LED
+tables 2.2 KB, Snake 1.8 KB (its demo path search included), menu 1.5 KB,
+Pong / Star Chase / game shell / name tag / Breakout about 1.1 to 1.3 KB
+each, Flappy 0.7 KB. The 5x7 font is 295 bytes.
+
+Rust is about 1.5 times the C size: about 3 KB of Embassy executor, timer
+and HAL interrupt code, the rest is code generation. There is room left for
+more games either way.
 
 ## What is solid and what is guessed
 

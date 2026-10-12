@@ -18,12 +18,15 @@
 #![no_main]
 
 mod anim;
+mod app;
 mod bootloader;
 mod font;
 mod frame;
+mod game;
+mod games;
 mod generated;
 mod ledpwm;
-mod snake;
+mod nametag;
 mod touch;
 
 use ch32_hal as hal;
@@ -33,7 +36,7 @@ use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Ticker, Timer};
 use hal::gpio::{Input, Pull};
 
-use anim::Player;
+use app::App;
 use frame::Frame;
 
 /// Things that happen to the badge, consumed by the render loop.
@@ -95,7 +98,7 @@ async fn main(spawner: Spawner) -> ! {
 
     // LEDPWM owns PA0..PA23 and PB0..PB15; nothing else may touch those pins.
     let mut display = ledpwm::LedPwm::new();
-    let mut player = Player::new();
+    let mut app = App::new();
     let mut frame = Frame::new();
     let mut ticker = Ticker::every(Duration::from_hz(anim::FPS as u64));
 
@@ -106,16 +109,16 @@ async fn main(spawner: Spawner) -> ! {
                 for t in 0..anim::FPS {
                     frame.clear();
                     anim::usb_boot(&mut frame, t);
-                    display.show(&frame, player.brightness().max(64));
+                    display.show(&frame, app.brightness().max(64));
                     ticker.next().await;
                 }
                 bootloader::reboot_to_boot_rom();
             }
-            player.handle(ev);
+            app.handle(ev);
         }
         frame.clear();
-        player.render(&mut frame);
-        display.show(&frame, player.brightness());
+        app.render(&mut frame, touch::held());
+        display.show(&frame, app.brightness());
         ticker.next().await;
     }
 }

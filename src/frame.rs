@@ -168,10 +168,12 @@ pub fn draw_label(f: &mut Frame, s: &str, row: usize, t: u32, fps: u32, v: u8) {
     if w <= GRID_W as i32 {
         draw_text(f, s, (GRID_W as i32 - w) / 2, row, v);
     } else {
+        // copies follow each other every `period` columns: the one coming
+        // in from the right, and the one before it, still going out on the left
         let period = w + 8;
-        let off = (t * 10 / fps) as i32 % period;
-        draw_text(f, s, GRID_W as i32 - off, row, v);
-        draw_text(f, s, GRID_W as i32 - off + period, row, v);
+        let x = GRID_W as i32 - (t * 10 / fps) as i32 % period;
+        draw_text(f, s, x, row, v);
+        draw_text(f, s, x - period, row, v);
     }
 }
 

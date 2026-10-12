@@ -210,6 +210,39 @@ mod tests {
         assert!(a.saved_name().is_none());
     }
 
+    /// A long label scrolls one column per step, also when the scroll
+    /// period wraps: no copy may vanish while it is still in view.
+    #[test]
+    fn label_scrolls_smoothly() {
+        use generated::{GRID, GRID_H, GRID_W, NONE};
+        let s = "HACKER HOTEL"; // 71 columns: scrolls
+        let fps = 10; // one column per frame
+        let grid = |t| {
+            let mut f = frame::Frame::new();
+            frame::draw_label(&mut f, s, 4, t, fps, 255);
+            let mut g = [[0u8; GRID_W]; GRID_H];
+            for r in 0..GRID_H {
+                for c in 0..GRID_W {
+                    if GRID[r][c] != NONE {
+                        g[r][c] = f.px[GRID[r][c] as usize];
+                    }
+                }
+            }
+            g
+        };
+        let period = font::text_width(s) as u32 + 8;
+        for t in 0..2 * period {
+            let (a, b) = (grid(t), grid(t + 1));
+            for r in 0..GRID_H {
+                for c in 0..GRID_W - 1 {
+                    if GRID[r][c] != NONE && GRID[r][c + 1] != NONE {
+                        assert_eq!(b[r][c], a[r][c + 1], "jump at t={t}, row {r}, col {c}");
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn name_cleans_up() {
         assert_eq!(Name::new(b"anne jan  ").as_str(), "ANNE JAN");

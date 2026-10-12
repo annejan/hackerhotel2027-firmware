@@ -65,10 +65,12 @@ void draw_label(const char *s, int row, uint32_t t, uint32_t fps, uint8_t v)
     if (w <= GRID_W) {
         draw_text(s, (GRID_W - w) / 2, row, v);
     } else {
+        /* copies follow each other every `period` columns: the one coming
+         * in from the right, and the one before it, still going out on the left */
         int period = w + 8;
-        int off = (int)(t * 10 / fps) % period;
-        draw_text(s, GRID_W - off, row, v);
-        draw_text(s, GRID_W - off + period, row, v);
+        int x = GRID_W - (int)(t * 10 / fps) % period;
+        draw_text(s, x, row, v);
+        draw_text(s, x - period, row, v);
     }
 }
 

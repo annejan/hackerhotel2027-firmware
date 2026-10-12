@@ -12,13 +12,22 @@
 //! main.rs to keep in flash.
 //! Games: demo mode until you press ◀, B or ▶; then the game owns the
 //! buttons (see games/).
+//! Infrared: B on the name tag sends the name (HELLO). A badge that gets a
+//! HELLO greets the sender ("HI" and the name) and answers with its own
+//! name (REPLY), which greets back; so one press swaps names. The packets
+//! go out through `ir_take()` (main.rs hands them to ir.rs).
+//! Hold A + B for 3 s: the bring-up test (selftest.rs).
 
 use crate::anim::{self, Fire, Life, FPS};
 use crate::editor::{Done, Editor};
-use crate::frame::{draw_label, Frame, Rgb, Rng};
+use crate::font::text_width;
+use crate::frame::{draw_label, draw_text, hsv, Frame, Rgb, Rng};
 use crate::game::{Game, Kind};
-use crate::generated::{EDGE, RGB};
+use crate::generated::{EDGE, GRID_W, RGB};
+use crate::irproto;
+use crate::log;
 use crate::nametag::{self, Name};
+use crate::selftest::{Hw, Selftest};
 use crate::Event;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -60,6 +69,8 @@ const ITEMS: [(Item, &str); 16] = [
 /// bright, so the steps stay low.
 const LEVELS: [u8; 5] = [4, 12, 32, 80, 255];
 const MENU_TIMEOUT: u32 = 20 * FPS;
+const GREET_HI: u32 = FPS; // "HI" first, then the name
+const GREET_MIN: u32 = 4 * FPS;
 
 pub struct App {
     item: usize,
@@ -76,6 +87,19 @@ pub struct App {
     name: Name,
     editor: Option<Editor>,
     saved: Option<Name>,
+    // infrared
+    ir_out: Option<(u8, Name)>, // a packet waiting for the IR driver
+    beam: u32,                  // > 0: frames left of the "sending" sweep
+    reply_in: u32,              // > 0: frames until we answer a HELLO
+    greet_pending: bool,
+    greeting: bool,
+    greet_t: u32,
+    greet_frames: u32,
+    greet: Name, // the other badge's name
+    met: u16,    // HELLOs and REPLYs since power on
+    test: Option<Selftest>,
+    /// Hardware state for the bring-up test; main.rs keeps it current.
+    pub hw: Hw,
 }
 
 impl App {
@@ -99,6 +123,17 @@ impl App {
             name,
             editor: None,
             saved: None,
+            ir_out: None,
+            beam: 0,
+            reply_in: 0,
+            greet_pending: false,
+            greeting: false,
+            greet_t: 0,
+            greet_frames: 0,
+            greet: Name::new(b""),
+            met: 0,
+            test: None,
+            hw: Hw::default(),
         }
     }
 
@@ -148,9 +183,25 @@ impl App {
 
     pub fn handle(&mut self, ev: Event) {
         self.idle = 0;
+        if ev == Event::Selftest && self.test.is_none() {
+            return self.selftest();
+        }
+        if let Some(test) = self.test.as_mut() {
+            if !matches!(ev, Event::Charging(_)) {
+                if !test.handle(ev, self.hw) {
+                    self.test = None;
+                    self.select(0);
+                }
+                return;
+            }
+        }
         if let Event::Charging(c) = ev {
             self.charging = c;
-            self.show_charge = c && !(self.in_game() && self.game.playing()) && self.menu.is_none() && self.editor.is_none();
+            self.show_charge = c
+                && !(self.in_game() && self.game.playing())
+                && self.menu.is_none()
+                && self.editor.is_none()
+                && self.test.is_none();
             return;
         }
         if let Some(cursor) = self.menu {
@@ -175,10 +226,15 @@ impl App {
             }
             return;
         }
-        if self.show_charge {
+        if self.greeting || self.show_charge {
             if let Event::Tap(_) = ev {
+                self.greeting = false;
                 self.show_charge = false;
             }
+            return;
+        }
+        if ITEMS[self.item].0 == Item::Name && ev == Event::Tap(1) {
+            self.ir_hello();
             return;
         }
         if self.in_game() && self.game.handle(ev, &mut self.rng) {
@@ -219,6 +275,7 @@ impl App {
         self.menu = None;
         self.editor = None;
         self.show_charge = false;
+        self.greeting = false;
         self.select(i);
         true
     }
@@ -254,10 +311,128 @@ impl App {
         self.charging
     }
 
+    /// The bring-up test (selftest.rs), as A + B held for 3 s starts it.
+    pub fn selftest(&mut self) {
+        self.menu = None;
+        self.editor = None;
+        self.show_charge = false;
+        self.greeting = false;
+        self.test = Some(Selftest::new(self.hw));
+    }
+
+    /// Send our name over IR, as B on the name tag does; false while a
+    /// packet is still waiting.
+    pub fn ir_hello(&mut self) -> bool {
+        if self.ir_out.is_some() {
+            return false;
+        }
+        self.ir_out = Some((irproto::HELLO, self.name));
+        self.beam = FPS;
+        log::line("ir: hello sent");
+        true
+    }
+
+    /// A packet to send, for main.rs to hand to the IR driver.
+    pub fn ir_take(&mut self) -> Option<(u8, Name)> {
+        self.ir_out.take()
+    }
+
+    /// The bring-up test's IR check wants to hear our own packets.
+    pub fn ir_loopback(&self) -> bool {
+        self.test.as_ref().is_some_and(|t| t.loopback())
+    }
+
+    /// A packet from another badge (or our own, in the IR test).
+    pub fn ir_received(&mut self, ty: u8, data: &[u8]) {
+        if ty == irproto::TEST {
+            if let Some(test) = self.test.as_mut() {
+                test.ir_heard();
+            }
+            return;
+        }
+        if ty != irproto::HELLO && ty != irproto::REPLY {
+            return;
+        }
+        let name = Name::new(data);
+        if name.bytes().is_empty() {
+            return;
+        }
+        self.met = self.met.wrapping_add(1);
+        log::text(if ty == irproto::HELLO { "ir: hello from " } else { "ir: reply from " });
+        log::line(name.as_str());
+        if ty == irproto::HELLO {
+            self.reply_in = 3 + self.rng.next() % 6; // 0.1 to 0.3 s: let their receiver settle
+        }
+        self.greet = name;
+        self.greet_pending = true;
+    }
+
+    fn ir_tick(&mut self) {
+        if self.reply_in > 0 {
+            self.reply_in -= 1;
+            if self.reply_in == 0 {
+                if self.ir_out.is_none() {
+                    self.ir_out = Some((irproto::REPLY, self.name));
+                    log::line("ir: reply sent");
+                } else {
+                    self.reply_in = 1; // still sending something: next frame
+                }
+            }
+        }
+        let busy = self.menu.is_some() || self.editor.is_some() || self.test.is_some() || (self.in_game() && self.game.playing());
+        if self.greet_pending && !busy {
+            self.greet_pending = false;
+            self.greeting = true;
+            self.show_charge = false;
+            self.greet_t = 0;
+            // long names scroll: stay until the name has gone by once
+            let w = text_width(self.greet.as_str());
+            self.greet_frames = GREET_HI + if w <= GRID_W { GREET_MIN } else { (GRID_W + w) as u32 * FPS / 10 };
+        }
+    }
+
+    /// "HI", then the other badge's name where the name tag has its own;
+    /// colours run round the arms.
+    fn draw_greeting(&self, f: &mut Frame, t: u32) {
+        let s = self.greet.as_str();
+        let w = text_width(s);
+        if t < GREET_HI {
+            draw_text(f, "HI", (GRID_W - text_width("HI")) as i32 / 2, 4, 255);
+        } else if w <= GRID_W {
+            draw_text(f, s, (GRID_W - w) as i32 / 2, 4, 255);
+        } else {
+            // scrolls by once, at the name tag's speed
+            draw_text(f, s, GRID_W as i32 - ((t - GREET_HI) * 10 / FPS) as i32, 4, 255);
+        }
+        for (i, led) in RGB.iter().enumerate() {
+            let h = (led.arm as u32 * 51 + led.rank as u32 * 12).wrapping_sub(t * 6) as u8;
+            f.rgb(i, hsv(h, 255, 200));
+        }
+        for (j, &s) in EDGE.iter().enumerate() {
+            let k = (j as u32 * 7).wrapping_sub(t * 3) % 71;
+            f.set(s, if k < 10 { 200 } else { 20 });
+        }
+    }
+
+    /// Sending: a white wave runs out along the arms.
+    fn draw_beam(&self, f: &mut Frame) {
+        let front = ((FPS - self.beam) * 9 / FPS) as i32; // rank of the wave, 0..8
+        for (i, led) in RGB.iter().enumerate() {
+            let d = front - led.rank as i32;
+            if (0..3).contains(&d) {
+                f.rgb(i, Rgb(200, 220, 255).scaled(255 - d as u8 * 80));
+            }
+        }
+    }
+
     /// `held`: buttons down right now, bit n = button n (◀ B A ▶).
     pub fn render(&mut self, f: &mut Frame, held: u8) {
+        self.ir_tick();
         let t = self.t;
         self.t = self.t.wrapping_add(1);
+        if let Some(test) = self.test.as_mut() {
+            return test.render(f, held, self.hw, self.level, self.charging, &mut self.ir_out);
+        }
         if let Some(cursor) = self.menu {
             self.idle += 1;
             if self.idle > MENU_TIMEOUT {
@@ -271,11 +446,25 @@ impl App {
             }
             return;
         }
+        if self.greeting {
+            self.draw_greeting(f, self.greet_t);
+            self.greet_t += 1;
+            if self.greet_t >= self.greet_frames {
+                self.greeting = false;
+            }
+            return;
+        }
         if self.show_charge {
             return anim::charging(f, t);
         }
         match ITEMS[self.item].0 {
-            Item::Name => nametag::name(f, t, &mut self.rng, &self.name),
+            Item::Name => {
+                nametag::name(f, t, &mut self.rng, &self.name);
+                if self.beam > 0 {
+                    self.draw_beam(f);
+                    self.beam -= 1;
+                }
+            }
             Item::Hotel => nametag::hotel(f, t),
             Item::Ripple => anim::ripple(f, t),
             Item::Galaxy => anim::galaxy(f, t),

@@ -12,3 +12,6 @@ crate-type = ["cdylib", "rlib"]
 
 [profile.dev]
 opt-level = 1   # keeps overflow and bounds checks, runs fast enough for soak tests
+
+[dependencies]
+critical-section = { version = "1", features = ["std"] }   # for log.rs

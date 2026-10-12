@@ -138,7 +138,7 @@ impl Game {
             }
             Event::Hold(2) => false, // menu, even from a game
             Event::Tap(_) | Event::Hold(_) => !self.demo,
-            Event::Charging(_) | Event::Bootloader => false,
+            Event::Charging(_) | Event::Bootloader | Event::Selftest => false,
         }
     }
 

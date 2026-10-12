@@ -36,6 +36,8 @@ pub const HOLD_MS: u64 = 600;
 const HOLD_TICKS: u16 = (HOLD_MS / POLL_MS) as u16;
 /// Hold these two (◀ + ▶) together this long to reboot into the USB boot ROM.
 pub const BOOT_CHORD: (usize, usize) = (0, 3);
+/// And these two (A + B) for the bring-up test.
+pub const TEST_CHORD: (usize, usize) = (2, 1);
 pub const BOOT_MS: u64 = 3000;
 const BOOT_TICKS: u16 = (BOOT_MS / POLL_MS) as u16;
 
@@ -97,9 +99,11 @@ pub async fn scan(pins: [Input<'static>; BUTTONS]) {
             }
         }
 
-        let (a, b) = (&buttons[BOOT_CHORD.0], &buttons[BOOT_CHORD.1]);
-        if a.down && b.down && a.ticks.min(b.ticks) == BOOT_TICKS {
-            let _ = EVENTS.try_send(Event::Bootloader);
+        for (chord, ev) in [(BOOT_CHORD, Event::Bootloader), (TEST_CHORD, Event::Selftest)] {
+            let (a, b) = (&buttons[chord.0], &buttons[chord.1]);
+            if a.down && b.down && a.ticks.min(b.ticks) == BOOT_TICKS {
+                let _ = EVENTS.try_send(ev);
+            }
         }
 
         ticker.next().await;

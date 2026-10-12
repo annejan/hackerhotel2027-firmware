@@ -26,7 +26,7 @@
 //! addresses are the low 16 bits of a RAM address.
 
 use core::ptr::{addr_of, addr_of_mut, write_volatile};
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
 use ch32_hal as hal;
 
@@ -80,6 +80,12 @@ static mut ROWS: Rows = Rows([[[0; ROW_WORDS]; COMS]; 2]);
 static FRONT: AtomicU8 = AtomicU8::new(0);
 static COM: AtomicU8 = AtomicU8::new(0);
 static PENDING: AtomicBool = AtomicBool::new(false);
+static ROWS_SHOWN: AtomicU32 = AtomicU32::new(0);
+
+/// Rows shown since power on (for the bring-up test).
+pub fn rows() -> u32 {
+    ROWS_SHOWN.load(Ordering::Relaxed)
+}
 
 #[inline]
 fn w8(off: usize, v: u8) {
@@ -102,6 +108,7 @@ fn load_row(c: u8) {
 
 #[qingke_rt::interrupt]
 fn LEDPWM() {
+    ROWS_SHOWN.store(ROWS_SHOWN.load(Ordering::Relaxed).wrapping_add(1), Ordering::Relaxed);
     let mut c = COM.load(Ordering::Relaxed) + 1;
     if c as usize == COMS {
         c = 0;

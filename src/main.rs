@@ -9,13 +9,16 @@
 //!       -  35 RGB LEDs, 7 per arm (one PWM channel, three COMs each)
 //!   * four push buttons ◀ B A ▶ (PC5, PB20, PC4, PB18, active low; see buttons.rs)
 //!   * LiPo charger XT4054, CHRG status on PB22; VBUS sense on PC3
-//!   * not used yet: IR receiver (PB19), IR LED (PB23 anode, PB21 cathode),
-//!     UART header (USART3: PB16 TX, PB17 RX), SWD header (PC18 SWIO, PC19 SWCK)
+//!   * IR receiver (PB19) and IR LED (PB23 anode, PB21 cathode): ir.rs
+//!   * UART header (USART3: PB16 TX, PB17 RX): uart.rs; SWD header (PC18 SWIO, PC19 SWCK)
 //!
 //! Tasks:
 //!   main loop      renders the current animation at FPS and hands frames to the display
-//!   buttons::scan  polls the buttons, sends Press/Tap/Hold/Bootloader events
+//!   buttons::scan  polls the buttons, sends Press/Tap/Hold/Bootloader/Selftest events
 //!   charge_monitor watches CHRG, sends Charging events
+//!   infrared       decodes received IR packets, sends the ones the app asks for
+//!   serial         the UART: the log out, console lines in
+//! The app is shared between the tasks (`with_app`).
 #![no_std]
 #![no_main]
 
@@ -23,6 +26,12 @@ mod anim;
 mod app;
 mod bootloader;
 mod buttons;
+mod console;
+mod ir;
+mod irproto;
+mod log;
+mod selftest;
+mod uart;
 mod editor;
 mod font;
 mod frame;
@@ -32,6 +41,10 @@ mod generated;
 mod ledpwm;
 mod nametag;
 mod store;
+
+use core::cell::{RefCell, UnsafeCell};
+use core::mem::MaybeUninit;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use ch32_hal as hal;
 use embassy_executor::Spawner;
@@ -56,6 +69,58 @@ pub enum Event {
     Charging(bool),
     /// ◀ + ▶ held for `buttons::BOOT_MS`: reboot into the USB boot ROM
     Bootloader,
+    /// A + B held as long: the bring-up test (selftest.rs)
+    Selftest,
+}
+
+/// The app, shared by the tasks on the one thread-mode executor. No task
+/// holds it across an await and no interrupt touches it, so a RefCell is
+/// all the locking it needs.
+/// (MaybeUninit keeps it in .bss: an `Option<App>` would need 1.2 KB of
+/// flash for its initial value.)
+struct SharedApp(UnsafeCell<MaybeUninit<RefCell<App>>>, AtomicBool);
+unsafe impl Sync for SharedApp {}
+static APP: SharedApp = SharedApp(UnsafeCell::new(MaybeUninit::uninit()), AtomicBool::new(false));
+
+fn start_app(app: App) {
+    unsafe { (*APP.0.get()).write(RefCell::new(app)) };
+    APP.1.store(true, Ordering::Release);
+}
+
+fn with_app<R>(f: impl FnOnce(&mut App) -> R) -> R {
+    assert!(APP.1.load(Ordering::Acquire), "app not started");
+    f(&mut unsafe { (*APP.0.get()).assume_init_ref() }.borrow_mut())
+}
+
+/// PC3 sees VBUS (through R33 to GND): high while USB powers the badge.
+fn vbus() -> bool {
+    hal::pac::GPIOC.indr().read().0 & 1 << 3 != 0
+}
+
+#[embassy_executor::task]
+async fn infrared() {
+    let mut ir = ir::Ir::new();
+    loop {
+        ir.poll(|ty, data| with_app(|app| app.ir_received(ty, data)));
+        with_app(|app| {
+            ir.set_loopback(app.ir_loopback());
+            if !ir.busy() {
+                if let Some((ty, name)) = app.ir_take() {
+                    ir.send(ty, name.bytes());
+                }
+            }
+        });
+        Timer::after_millis(5).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn serial() {
+    let mut uart = uart::Uart::new();
+    loop {
+        uart.poll(|line| with_app(|app| console::line(app, line)));
+        Timer::after_micros(200).await;
+    }
 }
 
 pub static EVENTS: Channel<CriticalSectionRawMutex, Event, 8> = Channel::new();
@@ -111,7 +176,13 @@ async fn main(spawner: Spawner) -> ! {
 
     // LEDPWM owns PA0..PA23 and PB0..PB15; nothing else may touch those pins.
     let mut display = ledpwm::LedPwm::new();
-    let mut app = App::new(store::load().unwrap_or_default());
+    let name = store::load().unwrap_or_default();
+    log::text("\r\nhh27 starfish badge, rust firmware. Name: ");
+    log::line(name.as_str());
+    log::line("Type help.");
+    start_app(App::new(name));
+    spawner.spawn(infrared().unwrap());
+    spawner.spawn(serial().unwrap());
     let mut frame = Frame::new();
     let mut ticker = Ticker::every(Duration::from_hz(anim::FPS as u64));
 
@@ -119,22 +190,29 @@ async fn main(spawner: Spawner) -> ! {
         while let Ok(ev) = EVENTS.try_receive() {
             if ev == Event::Bootloader {
                 // show it for a second, so a held chord is visibly accepted
+                let level = with_app(|app| app.brightness()).max(32);
                 for t in 0..anim::FPS {
                     frame.clear();
                     anim::usb_boot(&mut frame, t);
-                    display.show(&frame, app.brightness().max(32));
+                    display.show(&frame, level);
                     ticker.next().await;
                 }
                 bootloader::reboot_to_boot_rom();
             }
-            app.handle(ev);
+            with_app(|app| app.handle(ev));
         }
-        if let Some(name) = app.saved_name() {
+        if let Some(name) = with_app(|app| app.saved_name()) {
             store::save(&name); // a page erase and program: a few ms
+            log::text("name saved: ");
+            log::line(name.as_str());
         }
         frame.clear();
-        app.render(&mut frame, buttons::held());
-        display.show(&frame, app.brightness());
+        let level = with_app(|app| {
+            app.hw = selftest::Hw { rows: ledpwm::rows(), vbus: vbus() };
+            app.render(&mut frame, buttons::held());
+            app.brightness()
+        });
+        display.show(&frame, level);
         ticker.next().await;
     }
 }

@@ -20,6 +20,7 @@
 mod anim;
 mod app;
 mod bootloader;
+mod editor;
 mod font;
 mod frame;
 mod game;
@@ -27,6 +28,7 @@ mod games;
 mod generated;
 mod ledpwm;
 mod nametag;
+mod store;
 mod touch;
 
 use ch32_hal as hal;
@@ -98,7 +100,7 @@ async fn main(spawner: Spawner) -> ! {
 
     // LEDPWM owns PA0..PA23 and PB0..PB15; nothing else may touch those pins.
     let mut display = ledpwm::LedPwm::new();
-    let mut app = App::new();
+    let mut app = App::new(store::load().unwrap_or_default());
     let mut frame = Frame::new();
     let mut ticker = Ticker::every(Duration::from_hz(anim::FPS as u64));
 
@@ -115,6 +117,9 @@ async fn main(spawner: Spawner) -> ! {
                 bootloader::reboot_to_boot_rom();
             }
             app.handle(ev);
+        }
+        if let Some(name) = app.saved_name() {
+            store::save(&name); // a page erase and program: a few ms
         }
         frame.clear();
         app.render(&mut frame, touch::held());

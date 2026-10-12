@@ -1,8 +1,9 @@
 # C port
 
 Same firmware as the Rust one in `../src`: LED map, LEDPWM driver (same
-guesses), TouchKey, CHRG, the menu, name tag and hotel screens, the
-animations, all six games and the T1 + T4 reboot into the USB boot ROM.
+guesses), TouchKey, CHRG, the menu, the name tag with name entry (kept in
+flash), the hotel screen, the animations, all six games and the T1 + T4
+reboot into the USB boot ROM.
 It is plain C on registers, with no WCH peripheral library and no libc. It runs as one
 super-loop scheduled on a free-running SysTick, with no interrupts.
 
@@ -21,9 +22,9 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, GCC 15 `-Os` (xPack) | 20.3 KB | 4.7 KB (+ 2 KB stack) |
-| Rust + Embassy, `opt-level = "s"` | 31.8 KB | 2.4 KB (+ stack) |
-| Rust + Embassy, `opt-level = "z"` | 28.8 KB | 2.4 KB (+ stack) |
+| C, GCC 15 `-Os` (xPack) | 21.9 KB | 4.7 KB (+ 2 KB stack) |
+| Rust + Embassy, `opt-level = "s"` | 35.2 KB | 2.5 KB (+ stack) |
+| Rust + Embassy, `opt-level = "z"` | 31.7 KB | 2.5 KB (+ stack) |
 
 About 3 KB of the difference is the Embassy executor, time driver and HAL
 interrupt handlers, which the super-loop does not need. The rest is code

@@ -38,7 +38,7 @@ the group:
 | Orange | Name tag, Hacker Hotel |
 | Purple | Animations |
 | Green | Games |
-| White | Light |
+| White | Edit name, Light |
 
 | In the menu | |
 |---|---|
@@ -56,7 +56,8 @@ The items, in order:
    animations.
 4. **SNAKE**, **STARTRIS**, **BREAKOUT**, **PONG**, **FLAPPY**,
    **STAR CHASE**: games.
-5. **LIGHT**: brightness. Tap T3 to step through five levels: night,
+5. **EDIT NAME**: type your name on the badge, see [Your name](#your-name).
+6. **LIGHT**: brightness. Tap T3 to step through five levels: night,
    5%, 12.5%, 31% and full LED power. A bar on the grid shows the level.
    The menu stays open, so you can step again. The badge starts at 12.5%,
    because bare LEDs at close range are bright. Full power is for
@@ -66,7 +67,7 @@ The items, in order:
 
 | Touch | |
 |---|---|
-| T1 / T4 | Previous / next screen. This skips LIGHT, and it stops at the games, because a touch starts a game. |
+| T1 / T4 | Previous / next screen. This skips EDIT NAME and LIGHT, and it stops at the games, because a touch starts a game. |
 | Tap T3 | Brightness, the same five levels as LIGHT |
 | Hold T3 | Menu |
 
@@ -109,7 +110,38 @@ it.
 
 ## Your name
 
-The name is built into the firmware:
+### Typing it on the badge
+
+Open the menu (hold T3), go to **EDIT NAME** and tap T3. The name shows on
+the grid. The character you are changing is bright in the middle, with a
+blinking line under it. The outline shows how far into the name you are.
+
+| Touch | |
+|---|---|
+| T1 / T4 | Previous / next character. Hold to keep going. |
+| Tap T3 | Next position. One blank after the end, it goes back to the first character. |
+| Tap T2 | Previous position |
+| **Hold T3** | Save, and show the name tag |
+
+The characters come in this order: blank, `A`–`Z`, `0`–`9`, then
+`- . ! ? ' * : / # @`. From a blank, T4 gives `A`. To make the name
+shorter, set the characters at the end to blank. Names are up to 24
+characters long.
+
+If you touch nothing for a minute, the editor closes and does not save.
+
+Tapping T3 is the only way to move along the name without T2: past the end
+it goes back to the first character. So the editor works on badges where T2
+does not.
+
+The name is kept in the last 256-byte page of flash, so it is still there
+after you switch off. A firmware update with `wchisp flash` keeps it;
+`wchisp erase` clears it. Saving to flash is not tested on a badge yet.
+
+### The default
+
+Until you save a name, the badge shows the name the firmware was built
+with:
 
 ```sh
 BADGE_NAME="ANNE JAN" cargo build --release      # Rust
@@ -140,7 +172,8 @@ make -C c emu && python3 tools/emu/emu.py c
 The keys follow the same tap / hold / chord rules as the badge. To open the
 menu from a game, hold `3` (or `↑`) alone for 0.6 s. Hold `1` and `4`
 together for 3 s to see the USB boot screen. The emulator then powers the
-firmware on again.
+firmware on again. A name saved with EDIT NAME stays saved over `R` and the
+reboot, as it would in flash. It is lost when you close the emulator.
 
 The emulator needs Python with tkinter, numpy, scipy and Pillow. The
 interface between the emulator and the firmware is in

@@ -10,6 +10,7 @@
 #include "app.h"
 #include "events.h"
 #include "ledpwm.h"
+#include "store.h"
 #include "touch.h"
 
 #define CHRG_PIN 22 /* PB22, XT4054 CHRG: open-drain, low while charging */
@@ -40,7 +41,10 @@ int main(void)
 
     ledpwm_init();
     touch_init();
-    app_init();
+    name_t name;
+    if (!store_load(&name))
+        name_default(&name);
+    app_init(&name);
 
     uint32_t next_touch = ticks(), next_chrg = ticks(), next_frame = ticks();
     int charging = -1;
@@ -56,5 +60,7 @@ int main(void)
             app_render(touch_held);
             ledpwm_show(app_brightness());
         }
+        if (app_saved_name(&name))
+            store_save(&name); /* a page erase and program: a few ms */
     }
 }

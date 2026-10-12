@@ -9,7 +9,6 @@ license = "MIT"
 # CH643 support landed in ch32-hal but is not on crates.io yet; pin the commit this was written against.
 ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal", rev = "4fde79288cc052cfb59a0677de403b1ea0e03c09", features = [
     "ch643",
-    "memory-x",
     "embassy",
     "rt",
 ] }
@@ -17,6 +16,7 @@ embassy-executor = { version = "0.10.0", features = ["platform-spin", "executor-
 embassy-time = "0.5.1"
 embassy-sync = "0.8.0"
 qingke = "0.8"
+critical-section = "1"
 qingke-rt = "0.8"
 
 [profile.release]

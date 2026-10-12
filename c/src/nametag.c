@@ -1,7 +1,8 @@
 /* The two "badge" screens, same as ../../src/nametag.rs: your name, and
  * Hacker Hotel 2027.
  *
- * The name is set at build time:
+ * The name is entered on the badge (EDIT NAME in the menu, see editor.c)
+ * and kept in flash (store.c). Until then it is the build-time default:
  *   make NAME="ANNE JAN"
  * Letters, digits and ` !'*-.:?/#@` are drawn; lower case shows as upper. */
 #include "anim.h"
@@ -13,11 +14,30 @@
 #define BADGE_NAME "YOUR NAME"
 #endif
 
+void name_set(name_t *n, const char *s, int len)
+{
+    n->len = 0;
+    for (int i = 0; i < NAME_MAX; i++) {
+        char c = i < len ? s[i] : ' ';
+        if (c >= 'a' && c <= 'z')
+            c = (char)(c - 'a' + 'A');
+        n->s[i] = c >= ' ' && c <= 'Z' ? c : ' ';
+        if (n->s[i] != ' ')
+            n->len = (uint8_t)(i + 1);
+    }
+    n->s[n->len] = 0;
+}
+
+void name_default(name_t *n)
+{
+    name_set(n, BADGE_NAME, (int)sizeof BADGE_NAME - 1);
+}
+
 /* name tag: a soft sheen moves over the letters, the arms slowly cycle
  * colour, the outline sparkles */
-void nametag_name(uint32_t t)
+void nametag_name(uint32_t t, const name_t *name)
 {
-    draw_label(BADGE_NAME, 4, t, FPS, 255);
+    draw_label(name->s, 4, t, FPS, 255);
     /* sheen: dim the letters except where a diagonal band passes */
     int band = phase(t, 60);
     for (int r = 4; r < 4 + FONT_H; r++)

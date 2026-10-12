@@ -24,7 +24,7 @@ CFLAGS  := $(ARCH) -Os -g -std=gnu11 -Wall -Wextra -ffreestanding \
            -ffunction-sections -fdata-sections -fno-common -msmall-data-limit=8 \
            -Isrc -I$(SDK)/Core -I$(SDK)/Peripheral/inc -I$(WCH)/TOUCHKEY/TKey/User \
            $(CFLAGS_EXTRA)
-LDFLAGS := $(ARCH) -nostartfiles -nostdlib -T $(SDK)/Ld/Link.ld \
+LDFLAGS := $(ARCH) -nostartfiles -nostdlib -T build/link.ld \
            -Wl,--gc-sections -Wl,-Map=build/hh27.map -Wl,--print-memory-usage
 
 # the name tag: make NAME="ANNE JAN"
@@ -54,8 +54,13 @@ build/%.c.o: %.c | build vendor/ch643
 build/%.S.o: %.S | build vendor/ch643
 	$(CC) $(ARCH) -x assembler-with-cpp -c $< -o $@
 
-build/hh27.elf: $(OBJS)
-	$(CC) $(LDFLAGS) $^ -lgcc -o $@
+# WCH's linker script, with the code flash one 256-byte page shorter: that
+# page keeps the name (src/store.c)
+build/link.ld: | build vendor/ch643
+	sed 's/LENGTH = 62K/LENGTH = 62K - 256/' $(SDK)/Ld/Link.ld > $@
+
+build/hh27.elf: $(OBJS) build/link.ld
+	$(CC) $(LDFLAGS) $(OBJS) -lgcc -o $@
 
 build/hh27.bin: build/hh27.elf
 	$(OBJCOPY) -O binary $< $@
@@ -75,7 +80,7 @@ clean:
 # The hardware-independent part as a shared library for the emulator,
 # built with the host compiler (see ../tools/emu/badge_emu.h).
 HOSTCC   ?= cc
-EMU_SRCS := src/app.c src/anim.c src/frame.c src/generated.c src/game.c \
+EMU_SRCS := src/app.c src/anim.c src/editor.c src/frame.c src/generated.c src/game.c \
             $(wildcard src/games/*.c) src/nametag.c emu/emu.c
 
 emu: build/libhh27.so

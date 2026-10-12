@@ -8,6 +8,8 @@
  *   T3                 brightness
  * Menu:
  *   T1 / T4            previous / next item, T3 select, hold T3 close
+ * EDIT NAME: see editor.c; the new name comes out of app_saved_name() for
+ * main.c to keep in flash.
  * Games: demo mode until you touch T1, T2 or T4; then the game owns the
  * pads (see games/). */
 #include <stdbool.h>
@@ -15,6 +17,7 @@
 #include "anim.h"
 #include "app.h"
 #include "bootloader.h"
+#include "editor.h"
 #include "frame.h"
 #include "game.h"
 #include "nametag.h"
@@ -29,13 +32,14 @@ enum {
     FIRE,
     TWINKLE,
     FIRST_GAME, /* the games, in game_kind_t order */
-    LIGHT = FIRST_GAME + GAMES,
+    EDIT_NAME = FIRST_GAME + GAMES,
+    LIGHT,
     ITEMS
 };
 
 static const char *const LABELS[ITEMS] = {
     "NAME", "HACKER HOTEL", "RIPPLE", "GALAXY", "HEART", "LIFE", "FIRE", "TWINKLE",
-    "SNAKE", "STARTRIS", "BREAKOUT", "PONG", "FLAPPY", "STAR CHASE", "LIGHT",
+    "SNAKE", "STARTRIS", "BREAKOUT", "PONG", "FLAPPY", "STAR CHASE", "EDIT NAME", "LIGHT",
 };
 
 /* brightness steps, as a share of full PWM duty (applied after gamma):
@@ -48,11 +52,15 @@ static struct {
     bool menu, charging, show_charge;
     uint32_t idle, t;
     uint8_t boot_frames; /* > 0: showing the USB boot screen, then reboot */
-} a = {.level = 2};
+    name_t name;
+    bool editing;
+    bool has_saved; /* `saved` waits for main.c to keep it in flash */
+    name_t saved;
+} a;
 
 static bool is_game(int i)
 {
-    return i >= FIRST_GAME && i < LIGHT;
+    return i >= FIRST_GAME && i < EDIT_NAME;
 }
 
 static void select_item(int i)
@@ -65,6 +73,30 @@ static void select_item(int i)
         fire_reset();
     else if (is_game(a.item))
         game_start((game_kind_t)(a.item - FIRST_GAME));
+    else if (a.item == EDIT_NAME) {
+        editor_start(&a.name);
+        a.editing = true;
+    }
+}
+
+bool app_saved_name(name_t *out)
+{
+    if (!a.has_saved)
+        return false;
+    *out = a.saved;
+    a.has_saved = false;
+    return true;
+}
+
+static void editor_done(edit_t done, const name_t *name)
+{
+    if (done == EDIT_SAVE) {
+        a.name = *name;
+        a.saved = *name;
+        a.has_saved = true;
+    }
+    a.editing = false;
+    select_item(NAME);
 }
 
 static int step(int i, int d)
@@ -72,17 +104,21 @@ static int step(int i, int d)
     return (i + d + ITEMS) % ITEMS;
 }
 
-/* quick browse outside the menu: LIGHT is only a menu entry, skip it */
+/* quick browse outside the menu: EDIT NAME and LIGHT are only menu
+ * entries, skip them */
 static void browse(int d)
 {
     int i = step(a.item, d);
-    if (i == LIGHT)
+    while (i == EDIT_NAME || i == LIGHT)
         i = step(i, d);
     select_item(i);
 }
 
-void app_init(void)
+void app_init(const name_t *name)
 {
+    memset(&a, 0, sizeof a);
+    a.level = 2;
+    a.name = *name;
     frame_init();
     life_init();
     fire_reset();
@@ -98,7 +134,7 @@ void app_event(event_t ev, uint8_t arg)
     a.idle = 0;
     if (ev == EV_CHARGING) {
         a.charging = arg;
-        a.show_charge = arg && !(is_game(a.item) && game_playing()) && !a.menu;
+        a.show_charge = arg && !(is_game(a.item) && game_playing()) && !a.menu && !a.editing;
         return;
     }
     if (a.menu) {
@@ -113,6 +149,13 @@ void app_event(event_t ev, uint8_t arg)
             select_item(a.cursor);
         } else if (ev == EV_HOLD && arg == 2)
             a.menu = false;
+        return;
+    }
+    if (a.editing) {
+        name_t name;
+        edit_t done = editor_event(ev, arg, &name);
+        if (done != EDIT_BUSY)
+            editor_done(done, &name);
         return;
     }
     if (a.show_charge) {
@@ -152,7 +195,7 @@ static void draw_menu(uint32_t t)
         fb[EDGE[j]] = j >= lo && j < hi ? 220 : 12;
     rgb_t group = c == NAME || c == HOTEL ? (rgb_t){255, 150, 20}
                   : is_game(c)            ? (rgb_t){20, 255, 70}
-                  : c == LIGHT            ? (rgb_t){255, 255, 255}
+                  : c >= EDIT_NAME        ? (rgb_t){255, 255, 255}
                                           : (rgb_t){170, 40, 255};
     for (int i = 0; i < RGB_LEDS; i++)
         fb_rgb(i, rgb_scaled(group, 110));
@@ -180,12 +223,18 @@ void app_render(uint8_t held)
         draw_menu(t);
         return;
     }
+    if (a.editing) {
+        edit_t done = editor_render(held);
+        if (done != EDIT_BUSY)
+            editor_done(done, &a.name);
+        return;
+    }
     if (a.show_charge) {
         anim_charging(t);
         return;
     }
     switch (a.item) {
-    case NAME: nametag_name(t); break;
+    case NAME: nametag_name(t, &a.name); break;
     case HOTEL: nametag_hotel(t); break;
     case RIPPLE: anim_ripple(t); break;
     case GALAXY: anim_galaxy(t); break;
@@ -193,7 +242,8 @@ void app_render(uint8_t held)
     case LIFE: life_render(t); break;
     case FIRE: fire_render(); break;
     case TWINKLE: anim_twinkle(t); break;
-    case LIGHT: select_item(NAME); break; /* never selected; only a menu entry */
+    case EDIT_NAME:
+    case LIGHT: select_item(NAME); break; /* menu entries only */
     default: game_render(held); break;
     }
 }

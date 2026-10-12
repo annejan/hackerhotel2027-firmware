@@ -2,6 +2,7 @@
  * ../../tools/emu/badge_emu.h. Built by `make emu` with the host compiler,
  * from the hardware-independent sources only. */
 #include <setjmp.h>
+#include <stdbool.h>
 #include "../../tools/emu/badge_emu.h"
 #include "anim.h"
 #include "app.h"
@@ -11,6 +12,9 @@
 #define EXPORT __attribute__((visibility("default")))
 
 static jmp_buf boot_rom;
+/* the name EDIT NAME saved; kept over emu_init like the badge's flash */
+static name_t flash_name;
+static bool has_flash_name;
 
 /* app.c shows the USB boot screen for a second, then calls this */
 void reboot_to_boot_rom(void)
@@ -21,7 +25,15 @@ void reboot_to_boot_rom(void)
 EXPORT uint32_t emu_abi(void) { return EMU_ABI; }
 EXPORT const char *emu_firmware(void) { return "c"; }
 EXPORT uint32_t emu_fps(void) { return FPS; }
-EXPORT void emu_init(void) { app_init(); }
+EXPORT void emu_init(void)
+{
+    name_t name;
+    if (has_flash_name)
+        name = flash_name;
+    else
+        name_default(&name);
+    app_init(&name);
+}
 EXPORT uint8_t emu_brightness(void) { return app_brightness(); }
 
 EXPORT void emu_event(uint8_t kind, uint8_t arg)
@@ -36,6 +48,8 @@ EXPORT uint32_t emu_render(uint8_t held, uint8_t *out)
     if (setjmp(boot_rom))
         return 1;
     app_render(held);
+    if (app_saved_name(&flash_name))
+        has_flash_name = true;
     for (int r = 0; r < GRID_H; r++)
         for (int c = 0; c < GRID_W; c++)
             *out++ = GRID[r][c] == SLOT_NONE ? 0 : fb[GRID[r][c]];

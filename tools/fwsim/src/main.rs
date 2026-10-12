@@ -16,12 +16,12 @@ use std::io::Write;
 use fwsim::{app, dump, frame, Event, FRAME_BYTES};
 
 fn soak(frames: u32) {
-    let mut a = app::App::new();
+    let mut a = app::App::new(fwsim::nametag::Name::default());
     let mut f = frame::Frame::new();
     let mut rng = frame::Rng::new(99);
     let mut held = 0u8;
     // walk every item with T4 taps; random play in between
-    for item in 0..15 {
+    for item in 0..16 {
         for t in 0..frames {
             let x = rng.next();
             if x % 9 == 0 {
@@ -64,7 +64,7 @@ fn record(path: &str, frames: u32, script: &[String]) {
         })
         .collect();
     events.sort_by_key(|e| e.0);
-    let mut a = app::App::new();
+    let mut a = app::App::new(fwsim::nametag::Name::default());
     let mut f = frame::Frame::new();
     let mut held = 0u8;
     let mut out = Vec::new();

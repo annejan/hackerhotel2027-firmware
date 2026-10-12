@@ -8,14 +8,17 @@
 //!   T3                 brightness
 //! Menu:
 //!   T1 / T4            previous / next item, T3 select, hold T3 close
+//! EDIT NAME: see editor.rs; the new name comes out of `saved_name()` for
+//! main.rs to keep in flash.
 //! Games: demo mode until you touch T1, T2 or T4; then the game owns the
 //! pads (see games/).
 
 use crate::anim::{self, Fire, Life, FPS};
+use crate::editor::{Done, Editor};
 use crate::frame::{draw_label, Frame, Rgb, Rng};
 use crate::game::{Game, Kind};
 use crate::generated::{EDGE, RGB};
-use crate::nametag;
+use crate::nametag::{self, Name};
 use crate::Event;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -29,10 +32,11 @@ enum Item {
     Fire,
     Twinkle,
     Game(Kind),
+    EditName,
     Light,
 }
 
-const ITEMS: [(Item, &str); 15] = [
+const ITEMS: [(Item, &str); 16] = [
     (Item::Name, "NAME"),
     (Item::Hotel, "HACKER HOTEL"),
     (Item::Ripple, "RIPPLE"),
@@ -47,6 +51,7 @@ const ITEMS: [(Item, &str); 15] = [
     (Item::Game(Kind::Pong), "PONG"),
     (Item::Game(Kind::Flappy), "FLAPPY"),
     (Item::Game(Kind::Chase), "STAR CHASE"),
+    (Item::EditName, "EDIT NAME"),
     (Item::Light, "LIGHT"),
 ];
 
@@ -68,10 +73,14 @@ pub struct App {
     life: Life,
     fire: Fire,
     game: Game,
+    name: Name,
+    editor: Option<Editor>,
+    saved: Option<Name>,
 }
 
 impl App {
-    pub fn new() -> Self {
+    /// `name`: the name kept in flash, or `Name::default()`.
+    pub fn new(name: Name) -> Self {
         let mut rng = Rng::new(0x2027_5EA5);
         let life = Life::new(&mut rng);
         let game = Game::new(Kind::Snake, &mut rng);
@@ -87,6 +96,9 @@ impl App {
             life,
             fire: Fire::new(),
             game,
+            name,
+            editor: None,
+            saved: None,
         }
     }
 
@@ -97,18 +109,34 @@ impl App {
             Item::Life => self.life = Life::new(&mut self.rng),
             Item::Fire => self.fire = Fire::new(),
             Item::Game(kind) => self.game = Game::new(kind, &mut self.rng),
+            Item::EditName => self.editor = Some(Editor::new(&self.name)),
             _ => {}
         }
+    }
+
+    /// A name the user just saved, once, for main.rs to keep in flash.
+    pub fn saved_name(&mut self) -> Option<Name> {
+        self.saved.take()
+    }
+
+    fn editor_done(&mut self, done: Done) {
+        if let Done::Save(name) = done {
+            self.name = name;
+            self.saved = Some(name);
+        }
+        self.editor = None;
+        self.select(0); // the name tag
     }
 
     fn step(i: usize, d: isize) -> usize {
         (i as isize + d).rem_euclid(ITEMS.len() as isize) as usize
     }
 
-    /// Previous / next screen outside the menu; LIGHT is only a menu entry.
+    /// Previous / next screen outside the menu; EDIT NAME and LIGHT are
+    /// only menu entries.
     fn browse(&mut self, d: isize) {
         let mut i = Self::step(self.item, d);
-        if ITEMS[i].0 == Item::Light {
+        while matches!(ITEMS[i].0, Item::EditName | Item::Light) {
             i = Self::step(i, d);
         }
         self.select(i);
@@ -122,7 +150,7 @@ impl App {
         self.idle = 0;
         if let Event::Charging(c) = ev {
             self.charging = c;
-            self.show_charge = c && !(self.in_game() && self.game.playing()) && self.menu.is_none();
+            self.show_charge = c && !(self.in_game() && self.game.playing()) && self.menu.is_none() && self.editor.is_none();
             return;
         }
         if let Some(cursor) = self.menu {
@@ -138,6 +166,12 @@ impl App {
                 }
                 Event::Hold(2) => self.menu = None,
                 _ => {}
+            }
+            return;
+        }
+        if let Some(editor) = self.editor.as_mut() {
+            if let Some(done) = editor.handle(ev) {
+                self.editor_done(done);
             }
             return;
         }
@@ -174,11 +208,17 @@ impl App {
             }
             return self.draw_menu(f, cursor, t);
         }
+        if let Some(editor) = self.editor.as_mut() {
+            if let Some(done) = editor.render(f, held) {
+                self.editor_done(done);
+            }
+            return;
+        }
         if self.show_charge {
             return anim::charging(f, t);
         }
         match ITEMS[self.item].0 {
-            Item::Name => nametag::name(f, t, &mut self.rng),
+            Item::Name => nametag::name(f, t, &mut self.rng, &self.name),
             Item::Hotel => nametag::hotel(f, t),
             Item::Ripple => anim::ripple(f, t),
             Item::Galaxy => anim::galaxy(f, t),
@@ -187,7 +227,7 @@ impl App {
             Item::Fire => self.fire.render(f, &mut self.rng),
             Item::Twinkle => anim::twinkle(f, t),
             Item::Game(_) => self.game.render(f, held, &mut self.rng),
-            Item::Light => self.select(0), // never selected; only a menu entry
+            Item::EditName | Item::Light => self.select(0), // menu entries only
         }
     }
 
@@ -204,7 +244,7 @@ impl App {
         let group = match item {
             Item::Name | Item::Hotel => Rgb(255, 150, 20),
             Item::Game(_) => Rgb(20, 255, 70),
-            Item::Light => Rgb(255, 255, 255),
+            Item::EditName | Item::Light => Rgb(255, 255, 255),
             _ => Rgb(170, 40, 255),
         };
         for i in 0..RGB.len() {

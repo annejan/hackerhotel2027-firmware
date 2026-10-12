@@ -9,6 +9,8 @@
 pub mod anim;
 #[path = "../../../src/app.rs"]
 pub mod app;
+#[path = "../../../src/editor.rs"]
+pub mod editor;
 #[path = "../../../src/font.rs"]
 pub mod font;
 #[path = "../../../src/frame.rs"]
@@ -68,6 +70,8 @@ struct Emu {
 }
 
 static EMU: Mutex<Option<Emu>> = Mutex::new(None);
+/// The name EDIT NAME saved; kept over emu_init like the badge's flash.
+static FLASH_NAME: Mutex<Option<nametag::Name>> = Mutex::new(None);
 
 #[no_mangle]
 pub extern "C" fn emu_abi() -> u32 {
@@ -86,7 +90,8 @@ pub extern "C" fn emu_fps() -> u32 {
 
 #[no_mangle]
 pub extern "C" fn emu_init() {
-    *EMU.lock().unwrap() = Some(Emu { app: app::App::new(), frame: frame::Frame::new(), boot: None });
+    let name = FLASH_NAME.lock().unwrap().unwrap_or_default();
+    *EMU.lock().unwrap() = Some(Emu { app: app::App::new(name), frame: frame::Frame::new(), boot: None });
 }
 
 #[no_mangle]
@@ -128,6 +133,87 @@ pub unsafe extern "C" fn emu_render(held: u8, out: *mut u8) -> u32 {
         }
         None => e.app.render(&mut e.frame, held),
     }
+    if let Some(name) = e.app.saved_name() {
+        *FLASH_NAME.lock().unwrap() = Some(name);
+    }
     dump(&e.frame, std::slice::from_raw_parts_mut(out, FRAME_BYTES));
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nametag::Name;
+
+    /// Menu -> EDIT NAME, as a user would: hold T3, 14 x T4, tap T3.
+    fn open_editor(a: &mut app::App) {
+        a.handle(Event::Hold(2));
+        for _ in 0..14 {
+            a.handle(Event::Tap(3));
+        }
+        a.handle(Event::Tap(2));
+    }
+
+    fn frames(a: &mut app::App, n: u32, held: u8) {
+        let mut f = frame::Frame::new();
+        for _ in 0..n {
+            f.clear();
+            a.render(&mut f, held);
+        }
+    }
+
+    #[test]
+    fn edit_and_save() {
+        let mut a = app::App::new(Name::new(b"AB"));
+        open_editor(&mut a);
+        frames(&mut a, 2, 0);
+        a.handle(Event::Press(3)); // A -> B
+        a.handle(Event::Tap(2)); // next position
+        a.handle(Event::Press(0)); // B -> A
+        a.handle(Event::Tap(2));
+        a.handle(Event::Press(0)); // blank -> @ (wraps backwards)
+        a.handle(Event::Hold(2)); // save
+        assert_eq!(a.saved_name().unwrap().as_str(), "BA@");
+        assert!(a.saved_name().is_none(), "handed out once");
+    }
+
+    #[test]
+    fn position_wraps_after_the_name() {
+        let mut a = app::App::new(Name::new(b"HI"));
+        open_editor(&mut a);
+        for _ in 0..3 {
+            a.handle(Event::Tap(2)); // H -> I -> blank -> back to H
+        }
+        a.handle(Event::Press(3)); // H -> I
+        a.handle(Event::Hold(2));
+        assert_eq!(a.saved_name().unwrap().as_str(), "II");
+    }
+
+    #[test]
+    fn held_pad_repeats() {
+        let mut a = app::App::new(Name::new(b"A"));
+        open_editor(&mut a);
+        a.handle(Event::Press(3)); // A -> B on touch-down
+        frames(&mut a, 40, 1 << 3); // then 7 repeats: frames 16, 20, ..., 40
+        a.handle(Event::Hold(2));
+        assert_eq!(a.saved_name().unwrap().as_str(), "I");
+    }
+
+    #[test]
+    fn untouched_editor_cancels() {
+        let mut a = app::App::new(Name::new(b"KEEP"));
+        open_editor(&mut a);
+        a.handle(Event::Press(3));
+        frames(&mut a, 61 * anim::FPS, 0);
+        assert!(a.saved_name().is_none());
+        a.handle(Event::Hold(2)); // now the menu, not a save
+        assert!(a.saved_name().is_none());
+    }
+
+    #[test]
+    fn name_cleans_up() {
+        assert_eq!(Name::new(b"anne jan  ").as_str(), "ANNE JAN");
+        assert_eq!(Name::new(b"").as_str(), "");
+        assert_eq!(Name::new(&[b'x'; 40]).as_str().len(), nametag::MAX);
+    }
 }

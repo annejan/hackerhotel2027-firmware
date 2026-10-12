@@ -23,6 +23,8 @@ pub mod games;
 pub mod generated;
 #[path = "../../../src/nametag.rs"]
 pub mod nametag;
+#[path = "../../../src/proto.rs"]
+pub mod proto;
 
 use std::ffi::c_char;
 use std::sync::Mutex;
@@ -140,6 +142,30 @@ pub unsafe extern "C" fn emu_render(held: u8, out: *mut u8) -> u32 {
     0
 }
 
+/// One packet of the badge's USB protocol, as if it came in over WebUSB;
+/// fills out[64] with the reply and returns its length.
+///
+/// # Safety
+/// `input` must point to `len` readable bytes, `out` to 64 writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn emu_usb(input: *const u8, len: i32, out: *mut u8) -> i32 {
+    let mut emu = EMU.lock().unwrap();
+    let Some(e) = emu.as_mut() else { return 0 };
+    let input = if input.is_null() || len <= 0 {
+        &[][..]
+    } else {
+        std::slice::from_raw_parts(input, (len as usize).min(proto::PACKET))
+    };
+    let mut reply = [0u8; proto::PACKET];
+    let n = proto::handle(&mut e.app, input, &mut reply);
+    std::ptr::copy_nonoverlapping(reply.as_ptr(), out, n);
+    // SET NAME: "flash" it, as main.rs does
+    if let Some(name) = e.app.saved_name() {
+        *FLASH_NAME.lock().unwrap() = Some(name);
+    }
+    n as i32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,6 +265,67 @@ mod tests {
                         assert_eq!(b[r][c], a[r][c + 1], "jump at t={t}, row {r}, col {c}");
                     }
                 }
+            }
+        }
+    }
+
+    fn usb(a: &mut app::App, input: &[u8]) -> Vec<u8> {
+        let mut out = [0u8; proto::PACKET];
+        let n = proto::handle(a, input, &mut out);
+        assert!((1..=proto::PACKET).contains(&n), "reply length {n} for {input:?}");
+        out[..n].to_vec()
+    }
+
+    #[test]
+    fn usb_protocol() {
+        let mut a = app::App::new(Name::new(b"ANNE JAN"));
+        assert_eq!(usb(&mut a, &[1]), [1, proto::VERSION, 16, 5, nametag::MAX as u8, b'r']);
+        assert_eq!(usb(&mut a, &[2]), b"\x02\x08ANNE JAN");
+        // SET NAME cleans up, replies with the clean name, and saves it
+        assert_eq!(usb(&mut a, b"\x03\x0ehacker  hotel "), b"\x03\x0dHACKER  HOTEL");
+        assert_eq!(a.saved_name().unwrap().as_str(), "HACKER  HOTEL");
+        assert_eq!(usb(&mut a, &[2]), b"\x02\x0dHACKER  HOTEL");
+        assert_eq!(usb(&mut a, &[3, 25]), [0xFF, 3], "longer than MAX");
+        assert_eq!(usb(&mut a, &[3, 5, b'A']), [0xFF, 3], "shorter than its length");
+        assert_eq!(usb(&mut a, &[3]), [0xFF, 3]);
+        // state, items, levels
+        assert_eq!(usb(&mut a, &[4]), [4, 0, 2, 0]);
+        assert_eq!(usb(&mut a, &[5, 9]), [4, 9, 2, 0]);
+        assert_eq!(usb(&mut a, &[5, 14]), [0xFF, 5], "EDIT NAME is menu only");
+        assert_eq!(usb(&mut a, &[5, 15]), [0xFF, 5], "LIGHT is menu only");
+        assert_eq!(usb(&mut a, &[5, 16]), [0xFF, 5]);
+        assert_eq!(usb(&mut a, &[5]), [0xFF, 5]);
+        assert_eq!(usb(&mut a, &[6, 4]), [4, 9, 4, 0]);
+        assert_eq!(usb(&mut a, &[6, 5]), [0xFF, 6]);
+        a.handle(Event::Charging(true));
+        assert_eq!(usb(&mut a, &[4]), [4, 9, 4, 1]);
+        // labels
+        assert_eq!(usb(&mut a, &[7, 13]), b"\x07\x0d\x0aSTAR CHASE");
+        assert_eq!(usb(&mut a, &[7, 16]), [0xFF, 7]);
+        // unknown command, empty packet
+        assert_eq!(usb(&mut a, &[0x42, 1, 2]), [0xFF, 0x42]);
+        assert_eq!(usb(&mut a, &[]), [0xFF, 0]);
+    }
+
+    #[test]
+    fn usb_protocol_fuzz() {
+        let mut a = app::App::new(Name::new(b"FUZZ"));
+        let mut rng = frame::Rng::new(0x1209_D035);
+        let mut f = frame::Frame::new();
+        for i in 0..200_000u32 {
+            let len = (rng.next() % 65) as usize;
+            let mut p = [0u8; 64];
+            for b in p.iter_mut().take(len) {
+                *b = rng.byte();
+            }
+            // mostly valid command bytes, so the arguments get exercised
+            if len > 0 && i % 4 != 0 {
+                p[0] = 1 + (p[0] % 7);
+            }
+            usb(&mut a, &p[..len]);
+            if i % 64 == 0 {
+                f.clear();
+                a.render(&mut f, 0);
             }
         }
     }

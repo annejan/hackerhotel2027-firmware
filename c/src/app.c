@@ -1,17 +1,17 @@
 /* What the badge shows, and the controls; same as ../../src/app.rs.
  *
  * Anywhere:
- *   hold T3            open the menu (also from a game)
- *   hold T1 + T4, 3 s  reboot into the USB boot ROM
+ *   hold A            open the menu (also from a game)
+ *   hold ◀ + ▶, 3 s   reboot into the USB boot ROM
  * Name, hotel and animations:
- *   T1 / T4            previous / next item
- *   T3                 brightness
+ *   ◀ / ▶             previous / next item
+ *   A                 brightness
  * Menu:
- *   T1 / T4            previous / next item, T3 select, hold T3 close
+ *   ◀ / ▶             previous / next item, A select, hold A close
  * EDIT NAME: see editor.c; the new name comes out of app_saved_name() for
  * main.c to keep in flash.
- * Games: demo mode until you touch T1, T2 or T4; then the game owns the
- * pads (see games/). */
+ * Games: demo mode until you press ◀, B or ▶; then the game owns the
+ * buttons (see games/). */
 #include <stdbool.h>
 #include <string.h>
 #include "anim.h"

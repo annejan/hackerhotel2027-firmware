@@ -2,8 +2,8 @@
 """Game mock-ups for the Hacker Hotel 2027 starfish badge.
 
 Each game is played by a small scripted AI and rendered with the same board
-renderer as hh2027.py. The caption shows the four touch pads (T1..T4), lit
-while the AI "presses" them.
+renderer as hh2027.py. The caption shows the four buttons (◀ B A ▶), lit
+while the AI presses them.
 
   python3 tools/sim/games.py [--out=DIR] [--width=PX] [--no-mp4] [game ...]
 
@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hh2027 as h  # noqa: E402
 
+BUTTON_NAMES = ["◀", "B", "A", "▶"]  # button index order, as src/buttons.rs
 PRESS_FRAMES = 4      # how long a press stays lit in the caption
 
 DIGITS = {  # 3x5, rows top -> bottom
@@ -575,7 +576,7 @@ GAMES = {
 
 
 class PadRenderer(h.Renderer):
-    """Board render plus the four touch pads in the caption."""
+    """Board render plus the four buttons in the caption."""
 
     def __init__(self, L):
         super().__init__(L)
@@ -584,7 +585,7 @@ class PadRenderer(h.Renderer):
     def frame(self, mono, rgb, pressed, title, sub, pads):
         out = self.render(mono, rgb, title, sub)
         dr = ImageDraw.Draw(out)
-        w, gap = 50, 6
+        w, gap = 58, 6
         x = h.S - 16 - 4 * w - 3 * gap
         for i in range(4):
             role = pads.get(i)
@@ -592,12 +593,13 @@ class PadRenderer(h.Renderer):
             box = [x, h.S + 8, x + w, h.S + 30]
             if role is None:
                 dr.rounded_rectangle(box, 8, outline=(45, 48, 56), width=1)
-                dr.text(((box[0] + box[2]) / 2, h.S + 19), f"T{i + 1}", font=self.f_pad,
+                dr.text(((box[0] + box[2]) / 2, h.S + 19), BUTTON_NAMES[i], font=self.f_pad,
                         fill=(70, 74, 84), anchor="mm")
             else:
                 dr.rounded_rectangle(box, 8, fill=(224, 70, 30) if on else None,
                                      outline=(224, 70, 30) if on else (95, 99, 110), width=2)
-                dr.text(((box[0] + box[2]) / 2, h.S + 19), role, font=self.f_pad,
+                label = role if role == BUTTON_NAMES[i] else f"{BUTTON_NAMES[i]} {role}"
+                dr.text(((box[0] + box[2]) / 2, h.S + 19), label, font=self.f_pad,
                         fill=(255, 255, 255) if on else (170, 174, 185), anchor="mm")
             x += w + gap
         return out

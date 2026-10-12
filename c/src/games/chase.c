@@ -1,5 +1,5 @@
 /* Star Chase, same as ../../../src/games/chase.rs: a light runs round the
- * 71 outline LEDs. Stop it (T1, T2 or T4) beside the arm that is lit
+ * 71 outline LEDs. Stop it (◀, B or ▶) beside the arm that is lit
  * green. Every hit speeds it up; three misses and it is over. The grid
  * shows the level. */
 #include <string.h>
@@ -57,7 +57,7 @@ bool chase_tick(bool demo, input_t in)
         /* press near the end of the zone; from level 5 on, a bit late */
         stop = S.hits < 4 ? in_zone(h) && !in_zone(wrapi(h + 2, N)) : !in_zone(h) && in_zone(wrapi(h - 2, N));
     else
-        stop = in.pressed & (PAD_T1 | PAD_T2 | PAD_T4);
+        stop = in.pressed & (BTN_LEFT | BTN_B | BTN_RIGHT);
     if (stop) {
         if (in_zone(h)) {
             S.hits++;

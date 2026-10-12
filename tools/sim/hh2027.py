@@ -67,9 +67,16 @@ def refresh():
         if ref.startswith("D") and ("0402" in lib or "B1515" in lib):
             p = fp.GetPosition()
             leds.append(dict(ref=ref, rgb="B1515" in lib, x=mm(p.x), y=mm(p.y)))
+    # the push buttons, for the emulator (SW1, SW2 are on the back)
+    buttons = []
+    for ref in ("SW1", "SW2", "SW3", "SW4"):
+        fp = b.FindFootprintByReference(ref)
+        if fp:
+            p = fp.GetPosition()
+            buttons.append(dict(ref=ref, x=mm(p.x), y=mm(p.y), back=fp.IsFlipped()))
     LED_JSON.write_text(json.dumps(dict(
         bbox=[mm(bb.GetX()), mm(bb.GetY()), mm(bb.GetWidth()), mm(bb.GetHeight())],
-        leds=leds), indent=1))
+        leds=leds, buttons=buttons), indent=1))
     subprocess.run(["kicad-cli", "pcb", "render", "--side", "top", "--quality", "high",
                     "--width", str(RENDER_PX), "--height", str(RENDER_PX),
                     "--background", "opaque", "--use-board-stackup-colors",

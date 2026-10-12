@@ -1,21 +1,21 @@
 /* Shared game shell (same as ../../src/game.rs). Every game starts in demo
- * mode (it plays itself); touching T1, T2 or T4 starts a real game, and
- * game over shows the score. T3 stays free in demo mode, so holding it
+ * mode (it plays itself); pressing ◀, B or ▶ starts a real game, and
+ * game over shows the score. A stays free in demo mode, so holding it
  * still opens the menu.
  *
  * A game provides init / tick (one frame, false at game over) / draw /
- * score, see games.h. Input arrives as bitmasks of the pads: pressed since
- * the last frame and held right now (bit n = pad Tn+1). */
+ * score, see games.h. Input arrives as bitmasks of the buttons: pressed since
+ * the last frame and held right now (bit n = button n: ◀ B A ▶). */
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
 #include "events.h"
 #include "frame.h"
 
-#define PAD_T1 (1u << 0)
-#define PAD_T2 (1u << 1)
-#define PAD_T3 (1u << 2)
-#define PAD_T4 (1u << 3)
+#define BTN_LEFT (1u << 0)
+#define BTN_B (1u << 1)
+#define BTN_A (1u << 2)
+#define BTN_RIGHT (1u << 3)
 
 typedef enum { GAME_SNAKE, GAME_STARTRIS, GAME_BREAKOUT, GAME_PONG, GAME_FLAPPY, GAME_CHASE, GAMES } game_kind_t;
 
@@ -29,7 +29,7 @@ void game_start(game_kind_t kind);
 bool game_event(event_t ev, uint8_t arg);
 /* a real game is going on (not the demo) */
 bool game_playing(void);
-/* one frame into fb[]; held = pads touched right now */
+/* one frame into fb[]; held = buttons down right now */
 void game_render(uint8_t held);
 
 /* helpers for the games */

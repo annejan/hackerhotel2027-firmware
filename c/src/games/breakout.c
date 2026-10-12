@@ -1,6 +1,6 @@
 /* Breakout, same as ../../../src/games/breakout.rs: five rows of bricks on
  * top, a 3-wide paddle on the bottom row, the octagon's angled walls to
- * bounce off. T1 / T4 move the paddle (hold to keep moving). 3 lives on
+ * bounce off. ◀ / ▶ move the paddle (hold to keep moving). 3 lives on
  * arms 0..2; the score fills orange. */
 #include <string.h>
 #include "games.h"
@@ -46,10 +46,10 @@ bool breakout_tick(bool demo, input_t in)
     if (S.flash)
         S.flash--;
 
-    /* paddle: the demo follows the ball, the player holds T1 / T4 */
+    /* paddle: the demo follows the ball, the player holds ◀ / ▶ */
     int target = demo                                                                  ? cell(S.x)
-                 : in.pressed & PAD_T1 || (in.held & PAD_T1 && S.t % 3 == 0) ? S.paddle - 1
-                 : in.pressed & PAD_T4 || (in.held & PAD_T4 && S.t % 3 == 0) ? S.paddle + 1
+                 : in.pressed & BTN_LEFT || (in.held & BTN_LEFT && S.t % 3 == 0) ? S.paddle - 1
+                 : in.pressed & BTN_RIGHT || (in.held & BTN_RIGHT && S.t % 3 == 0) ? S.paddle + 1
                                                                                      : S.paddle;
     approach(&S.paddle, clampi(target, 5, 11), S.t, demo ? 2 : 1);
 

@@ -1,5 +1,5 @@
-/* Flappy, same as ../../../src/games/flappy.rs: one button. Touch T1, T2
- * or T4 to flap through the gaps. The arms fill gold with the pipes you
+/* Flappy, same as ../../../src/games/flappy.rs: one button. Press ◀, B
+ * or ▶ to flap through the gaps. The arms fill gold with the pipes you
  * pass. */
 #include <string.h>
 #include "games.h"
@@ -65,7 +65,7 @@ bool flappy_tick(bool demo, input_t in)
         int mid = next_gap() * ONE + GAP * ONE / 2 - ONE / 2;
         flap = S.vy >= 0 && S.y + S.vy * 3 > mid + ONE * 2 / 5;
     } else {
-        flap = in.pressed & (PAD_T1 | PAD_T2 | PAD_T4);
+        flap = in.pressed & (BTN_LEFT | BTN_B | BTN_RIGHT);
     }
     if (flap)
         S.vy = FLAP;

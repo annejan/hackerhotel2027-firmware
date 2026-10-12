@@ -1,10 +1,10 @@
 //! Shared game shell. Every game starts in demo mode (it plays itself);
-//! touching T1, T2 or T4 starts a real game, and game over shows the score.
-//! T3 stays free in demo mode, so holding it still opens the menu.
+//! pressing ◀, B or ▶ starts a real game, and game over shows the score.
+//! A stays free in demo mode, so holding it still opens the menu.
 //!
 //! A game implements `Play`: one `tick` per frame (returns false at game
-//! over), `draw`, and its `score`. Input arrives as bitmasks of the pads:
-//! `pressed` since the last frame and `held` right now (bit n = pad Tn+1).
+//! over), `draw`, and its `score`. Input arrives as bitmasks of the buttons:
+//! `pressed` since the last frame and `held` right now (bit n = button n: ◀ B A ▶).
 
 use crate::anim::FPS;
 use crate::frame::{draw_number, hsv, Frame, Rgb, Rng};
@@ -12,10 +12,10 @@ use crate::games::{Breakout, Chase, Flappy, Pong, Snake, Startris};
 use crate::generated::{EDGE, RGB};
 use crate::Event;
 
-pub const T1: u8 = 1 << 0;
-pub const T2: u8 = 1 << 1;
-pub const T3: u8 = 1 << 2;
-pub const T4: u8 = 1 << 3;
+pub const BTN_LEFT: u8 = 1 << 0;
+pub const BTN_B: u8 = 1 << 1;
+pub const BTN_A: u8 = 1 << 2;
+pub const BTN_RIGHT: u8 = 1 << 3;
 
 const CRASH_FRAMES: u8 = 20;
 const SCORE_FRAMES: u8 = (2 * FPS) as u8;
@@ -127,7 +127,7 @@ impl Game {
         match ev {
             Event::Press(p) if self.demo => {
                 if p == 2 {
-                    return false; // T3: tap = brightness, hold = menu
+                    return false; // A: tap = brightness, hold = menu
                 }
                 self.restart(false, rng);
                 true
@@ -188,7 +188,7 @@ impl Game {
                 }
             }
             State::Run => {
-                // demo mode: a slow dim chase round the outline says "touch me"
+                // demo mode: a slow dim chase round the outline says "press me"
                 if self.demo && !each!(&self.body, g => uses_edge(g)) {
                     for (j, &s) in EDGE.iter().enumerate() {
                         if (j as u32 + t / 3) % 12 == 0 {

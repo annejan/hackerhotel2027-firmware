@@ -2,16 +2,16 @@
  * firmware, for comparison. Same hardware notes as ../../src/main.rs.
  *
  * One super-loop, no interrupts: SysTick runs free on HCLK/8 and the loop
- * polls it to schedule touch scans (100 Hz), the CHRG pin (2 Hz) and
+ * polls it to schedule button scans (100 Hz), the CHRG pin (2 Hz) and
  * frames (FPS). */
 #include <stdbool.h>
 #include "ch643.h"
 #include "anim.h"
 #include "app.h"
+#include "buttons.h"
 #include "events.h"
 #include "ledpwm.h"
 #include "store.h"
-#include "touch.h"
 #include "usb.h"
 
 #define CHRG_PIN 22 /* PB22, XT4054 CHRG: open-drain, low while charging */
@@ -41,26 +41,26 @@ int main(void)
     GPIOB->BSXR = 1u << (CHRG_PIN - 16);
 
     ledpwm_init();
-    touch_init();
+    buttons_init();
     name_t name;
     if (!store_load(&name))
         name_default(&name);
     app_init(&name);
     usb_init();
 
-    uint32_t next_touch = ticks(), next_chrg = ticks(), next_frame = ticks();
+    uint32_t next_buttons = ticks(), next_chrg = ticks(), next_frame = ticks();
     int charging = -1;
     for (;;) {
         usb_poll();
-        if (due(&next_touch, TOUCH_POLL_MS * tick_ms))
-            touch_poll();
+        if (due(&next_buttons, BUTTONS_POLL_MS * tick_ms))
+            buttons_poll();
         if (due(&next_chrg, 500 * tick_ms)) {
             int c = !(GPIOB->INDR & (1u << CHRG_PIN));
             if (c != charging)
                 app_event(EV_CHARGING, (uint8_t)(charging = c));
         }
         if (due(&next_frame, 1000 * tick_ms / FPS)) {
-            app_render(touch_held);
+            app_render(buttons_held);
             ledpwm_show(app_brightness());
         }
         if (app_saved_name(&name))

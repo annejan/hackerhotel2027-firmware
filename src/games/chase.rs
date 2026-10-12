@@ -1,9 +1,9 @@
-//! Star Chase: a light runs round the 71 outline LEDs. Stop it (T1, T2 or
-//! T4) beside the arm that is lit green. Every hit speeds it up; three
+//! Star Chase: a light runs round the 71 outline LEDs. Stop it (◀, B or
+//! ▶) beside the arm that is lit green. Every hit speeds it up; three
 //! misses and it is over. The grid shows the level.
 
 use crate::frame::{draw_number, hsv, polar, Frame, Rgb, Rng};
-use crate::game::{arm_fill, Input, Play, T1, T2, T4};
+use crate::game::{arm_fill, Input, Play, BTN_LEFT, BTN_B, BTN_RIGHT};
 use crate::generated::{EDGE, RGB};
 
 const N: i32 = EDGE.len() as i32;
@@ -65,7 +65,7 @@ impl Play for Chase {
                 !self.in_zone(head) && self.in_zone((head - 2).rem_euclid(N))
             }
         } else {
-            inp.pressed & (T1 | T2 | T4) != 0
+            inp.pressed & (BTN_LEFT | BTN_B | BTN_RIGHT) != 0
         };
         if stop {
             if self.in_zone(head) {

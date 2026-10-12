@@ -1,26 +1,26 @@
 //! Name entry on the badge (EDIT NAME in the menu).
 //!
-//!   T1 / T4   previous / next character (hold to keep going)
-//!   tap T3    next position; past the end it wraps to the start
-//!   tap T2    previous position
-//!   hold T3   save and show the name tag
-//! Untouched for a minute, it closes without saving.
+//!   ◀ / ▶   previous / next character (hold to keep going)
+//!   tap A    next position; past the end it wraps to the start
+//!   tap B    previous position
+//!   hold A   save and show the name tag
+//! Left alone for a minute, it closes without saving.
 //!
 //! The grid shows the name with the character being edited in the middle,
 //! bright, with a blinking underline; the outline shows the position.
 
 use crate::anim::FPS;
 use crate::frame::{draw_text, Frame, Rgb};
-use crate::game::{T1, T4};
+use crate::game::{BTN_LEFT, BTN_RIGHT};
 use crate::generated::{EDGE, GRID_W, RGB};
 use crate::nametag::{Name, MAX};
 use crate::Event;
 
-/// The characters T1 / T4 step through, in this order; from a blank, T4
+/// The characters ◀ / ▶ step through, in this order; from a blank, ▶
 /// gives A.
 const CHARS: &[u8] = b" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.!?'*:/#@";
 const TIMEOUT: u32 = 60 * FPS;
-const REPEAT_AFTER: u8 = 12; // frames before a held pad repeats
+const REPEAT_AFTER: u8 = 12; // frames before a held button repeats
 const REPEAT_EVERY: u8 = 4;
 
 pub enum Done {
@@ -31,7 +31,7 @@ pub enum Done {
 pub struct Editor {
     buf: [u8; MAX],
     cursor: usize,
-    rep: [u8; 2], // frames T1 / T4 held
+    rep: [u8; 2], // frames ◀ / ▶ held
     idle: u32,
     t: u32,
 }
@@ -81,8 +81,8 @@ impl Editor {
         if self.idle > TIMEOUT {
             return Some(Done::Cancel);
         }
-        for (k, pad, d) in [(0, T1, -1), (1, T4, 1)] {
-            if held & pad != 0 {
+        for (k, btn, d) in [(0, BTN_LEFT, -1), (1, BTN_RIGHT, 1)] {
+            if held & btn != 0 {
                 self.rep[k] = self.rep[k].saturating_add(1);
                 if self.rep[k] > REPEAT_AFTER && self.rep[k] % REPEAT_EVERY == 0 {
                     self.step(d);

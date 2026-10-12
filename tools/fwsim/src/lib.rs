@@ -145,7 +145,7 @@ mod tests {
     use super::*;
     use nametag::Name;
 
-    /// Menu -> EDIT NAME, as a user would: hold T3, 14 x T4, tap T3.
+    /// Menu -> EDIT NAME, as a user would: hold A, 14 x ▶, tap A.
     fn open_editor(a: &mut app::App) {
         a.handle(Event::Hold(2));
         for _ in 0..14 {
@@ -190,17 +190,17 @@ mod tests {
     }
 
     #[test]
-    fn held_pad_repeats() {
+    fn held_button_repeats() {
         let mut a = app::App::new(Name::new(b"A"));
         open_editor(&mut a);
-        a.handle(Event::Press(3)); // A -> B on touch-down
+        a.handle(Event::Press(3)); // A -> B on press-down
         frames(&mut a, 40, 1 << 3); // then 7 repeats: frames 16, 20, ..., 40
         a.handle(Event::Hold(2));
         assert_eq!(a.saved_name().unwrap().as_str(), "I");
     }
 
     #[test]
-    fn untouched_editor_cancels() {
+    fn idle_editor_cancels() {
         let mut a = app::App::new(Name::new(b"KEEP"));
         open_editor(&mut a);
         a.handle(Event::Press(3));

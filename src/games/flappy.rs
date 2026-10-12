@@ -1,8 +1,8 @@
-//! Flappy: one button. Touch T1, T2 or T4 to flap through the gaps. The
+//! Flappy: one button. Press ◀, B or ▶ to flap through the gaps. The
 //! arms fill gold with the pipes you pass.
 
 use crate::frame::{on_grid, Frame, Rgb, Rng};
-use crate::game::{arms_score, Input, Play, T1, T2, T4};
+use crate::game::{arms_score, Input, Play, BTN_LEFT, BTN_B, BTN_RIGHT};
 use crate::generated::{GRID_H, GRID_W};
 
 const ONE: i32 = 256;
@@ -72,7 +72,7 @@ impl Play for Flappy {
             let mid = self.next_gap() * ONE + GAP * ONE / 2 - ONE / 2;
             self.vy >= 0 && self.y + self.vy * 3 > mid + ONE * 2 / 5
         } else {
-            inp.pressed & (T1 | T2 | T4) != 0
+            inp.pressed & (BTN_LEFT | BTN_B | BTN_RIGHT) != 0
         };
         if flap {
             self.vy = FLAP;

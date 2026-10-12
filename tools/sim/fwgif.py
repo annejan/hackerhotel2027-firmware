@@ -2,11 +2,11 @@
 """Render frames recorded by the firmware itself (tools/fwsim) on the board.
 
   (cd tools/fwsim && cargo run -- record ../../rec.bin 300 10:tap3)
-  python3 tools/sim/fwgif.py rec.bin out.gif "TITLE" "subtitle" [--pads=a,b,c,d]
+  python3 tools/sim/fwgif.py rec.bin out.gif "TITLE" "subtitle" [--buttons=a,b,c,d]
                               [--width=PX] [--skip=FRAMES]
 
 Each recorded frame is the grid (16 x 17), the outline (71), the RGB LEDs
-by (arm, rank) (35 x 3), a byte of pad state (bits 0-3 held, 4-7 pressed)
+by (arm, rank) (35 x 3), a byte of button state (bits 0-3 held, 4-7 pressed)
 and the brightness, as fwsim's dump() writes them.
 """
 import sys
@@ -22,7 +22,7 @@ import hh2027 as h  # noqa: E402
 def main(args):
     opts = dict(a[2:].split("=", 1) for a in args if a.startswith("--"))
     rec, out, title, sub = [a for a in args if not a.startswith("--")]
-    pads = {i: p for i, p in enumerate(opts.get("pads", ",,,").split(",")) if p}
+    pads = {i: p for i, p in enumerate(opts.get("buttons", ",,,").split(",")) if p}
     L = h.Layout()
     R = G.PadRenderer(L)
     GH, GW, NE, NR = L.GH, L.GW, len(L.edge), L.nr

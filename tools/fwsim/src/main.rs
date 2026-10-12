@@ -2,12 +2,12 @@
 //! games) on the PC, with the same sources as the badge.
 //!
 //!   cargo run -- soak [frames]
-//!       every menu item with random touches; debug build, so integer
+//!       every menu item with random presses; debug build, so integer
 //!       overflow and out-of-bounds panic
 //!   cargo run -- record OUT FRAMES [EVENT ...]
 //!       write FRAMES frames to OUT for tools/sim/fwgif.py. EVENT is
 //!       FRAME:ACTION with ACTION one of press0..3, tap0..3, hold0..3,
-//!       down0..3 / up0..3 (pad held), charge / nocharge.
+//!       down0..3 / up0..3 (button held), charge / nocharge.
 //!
 //! BADGE_NAME works as for the firmware build.
 
@@ -20,7 +20,7 @@ fn soak(frames: u32) {
     let mut f = frame::Frame::new();
     let mut rng = frame::Rng::new(99);
     let mut held = 0u8;
-    // walk every item with T4 taps; random play in between
+    // walk every item with ▶ taps; random play in between
     for item in 0..16 {
         for t in 0..frames {
             let x = rng.next();
@@ -104,7 +104,7 @@ fn record(path: &str, frames: u32, script: &[String]) {
         let mut buf = [0u8; FRAME_BYTES];
         dump(&f, &mut buf);
         out.extend_from_slice(&buf);
-        out.push(held | pressed << 4); // pads lit in the caption
+        out.push(held | pressed << 4); // buttons lit in the caption
         out.push(a.brightness());
     }
     std::fs::File::create(path).unwrap().write_all(&out).unwrap();

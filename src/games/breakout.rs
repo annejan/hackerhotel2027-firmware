@@ -1,9 +1,9 @@
 //! Breakout: five rows of bricks on top, a 3-wide paddle on the bottom row,
-//! and the octagon's angled walls to bounce off. T1 / T4 move the paddle
+//! and the octagon's angled walls to bounce off. ◀ / ▶ move the paddle
 //! (hold to keep moving). 3 lives on arms 0..2; the score fills orange.
 
 use crate::frame::{on_grid, Frame, Rgb, Rng, MASK};
-use crate::game::{approach, arm_fill, arms_score, Input, Play, T1, T4};
+use crate::game::{approach, arm_fill, arms_score, Input, Play, BTN_LEFT, BTN_RIGHT};
 use crate::generated::EDGE;
 
 const ONE: i32 = 256; // fixed point: 1/256 cell
@@ -73,12 +73,12 @@ impl Play for Breakout {
         self.t += 1;
         self.flash = self.flash.saturating_sub(1);
 
-        // paddle: the demo follows the ball, the player holds T1 / T4
+        // paddle: the demo follows the ball, the player holds ◀ / ▶
         let target = if demo {
             cell(self.x)
-        } else if inp.pressed & T1 != 0 || inp.held & T1 != 0 && self.t % 3 == 0 {
+        } else if inp.pressed & BTN_LEFT != 0 || inp.held & BTN_LEFT != 0 && self.t % 3 == 0 {
             self.paddle - 1
-        } else if inp.pressed & T4 != 0 || inp.held & T4 != 0 && self.t % 3 == 0 {
+        } else if inp.pressed & BTN_RIGHT != 0 || inp.held & BTN_RIGHT != 0 && self.t % 3 == 0 {
             self.paddle + 1
         } else {
             self.paddle

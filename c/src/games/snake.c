@@ -1,5 +1,5 @@
 /* Snake on the 17 x 16 grid, same as ../../../src/games/snake.rs. The
- * octagon's edge is the wall. T1 turns left, T4 turns right. The demo
+ * octagon's edge is the wall. ◀ turns left, ▶ turns right. The demo
  * steers by the shortest path to the food. The arms fill green. */
 #include <string.h>
 #include "games.h"
@@ -133,9 +133,9 @@ static bool step(bool demo)
 
 bool snake_tick(bool demo, input_t in)
 {
-    if (in.pressed & PAD_T1 && S.nturns < 2)
+    if (in.pressed & BTN_LEFT && S.nturns < 2)
         S.turns[S.nturns++] = -1;
-    if (in.pressed & PAD_T4 && S.nturns < 2)
+    if (in.pressed & BTN_RIGHT && S.nturns < 2)
         S.turns[S.nturns++] = 1;
     S.tick++;
     if (S.flash)

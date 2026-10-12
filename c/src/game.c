@@ -64,7 +64,7 @@ bool game_event(event_t ev, uint8_t arg)
     case EV_PRESS:
         if (g.demo) {
             if (arg == 2)
-                return false; /* T3: tap = brightness, hold = menu */
+                return false; /* A: tap = brightness, hold = menu */
             restart(false);
             return true;
         }
@@ -128,7 +128,7 @@ void game_render(uint8_t held)
             fb_rgb(i, rgb_scaled((rgb_t){255, 10, 0}, (uint8_t)(g.timer * (255 / CRASH_FRAMES))));
         break;
     default:
-        /* demo mode: a slow dim chase round the outline says "touch me" */
+        /* demo mode: a slow dim chase round the outline says "press me" */
         if (g.demo && !g.ops->uses_edge)
             for (int j = 0; j < EDGE_LEDS; j++)
                 if ((j + g.t / 3) % 12 == 0)

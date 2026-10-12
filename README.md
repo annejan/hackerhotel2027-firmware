@@ -14,19 +14,22 @@ positions. Bottom row: the Python animation sketches the firmware ports.
 
 ## Using the badge
 
-**[docs/USAGE.md](docs/USAGE.md)** is the full guide: touch rules, the menu,
+**[docs/USAGE.md](docs/USAGE.md)** is the full guide: the buttons, the menu,
 every game, the name tag and the emulator. The short version:
 
 | | |
 |---|---|
-| **Hold T3** | open the menu (from anywhere, also mid-game) |
-| Menu | T1 / T4 previous / next, **T3** select, hold T3 close |
-| Name, hotel, animations | T1 / T4 previous / next screen, T3 brightness |
-| Games | play themselves until you touch T1, T2 or T4 |
-| **Hold T1 + T4, 3 s** | reboot into the USB boot ROM for flashing |
+| **Hold A** | open the menu (from anywhere, also mid-game) |
+| Menu | ◀ / ▶ previous / next, **A** select, hold A close |
+| Name, hotel, animations | ◀ / ▶ previous / next screen, A brightness |
+| Games | play themselves until you press ◀, ▶ or B |
+| **Hold ◀ + ▶, 3 s** | reboot into the USB boot ROM for flashing |
 
-Type your name on the badge with **EDIT NAME** in the menu (T1/T4 letter,
-T3 next, hold T3 save). It is kept in flash. Until then the badge shows the
+◀ and ▶ are the two buttons on the front of the lower legs (thumbs), A and
+B the two on the back of the side arms (A right, B left).
+
+Type your name on the badge with **EDIT NAME** in the menu (◀/▶ letter,
+A next, hold A save). It is kept in flash. Until then the badge shows the
 build-time default: `BADGE_NAME="ANNE JAN" cargo build --release` (C:
 `make -C c NAME="ANNE JAN"`).
 
@@ -58,7 +61,8 @@ make -C c emu && python3 tools/emu/emu.py c                     # C firmware
 (cd tools/fwsim && cargo build --release) && python3 tools/emu/emu.py rust
 ```
 
-Keys `1`–`4` or the arrows are the pads; see
+The arrow keys are ◀ ▶ A B (← → ↑ ↓), and the buttons are drawn on the
+board where they are; see
 [docs/USAGE.md](docs/USAGE.md#emulator).
 
 ## Hardware
@@ -68,9 +72,11 @@ Keys `1`–`4` or the arrows are the pads; see
 | MCU | WCH **CH643Q**: QingKe V4C RISC-V (RV32IMAC), 48 MHz, 62 KiB flash, 20 KiB RAM, LQFP64 |
 | LEDs | 384 slots in a 24 × 16 matrix: PA0–PA23 drive the anodes (PWM), PB0–PB15 sink the cathodes (COM) |
 | | 208 mono LEDs in a 17 × 16 grid, 71 mono LEDs on the outline, 35 RGB LEDs (7 per arm) |
-| Touch | T1–T4 on PC0–PC3, TouchKey channels 10–13 |
-| Power | LiPo with XT4054 charger; CHRG on PB22 |
-| Debug | SWIO / SWCK go only to the MCU: no pads, so no WCH-LinkE |
+| Buttons | ◀ SW3 PC5, B SW1 PB20, A SW2 PC4, ▶ SW4 PB18; active low, 10k pull-ups on the board |
+| Power | LiPo (JST J2) with XT4054 charger and power path; CHRG on PB22; VBUS sense on PC3 |
+| Debug | SWD header J4: 1 SWIO (PC18), 2 SWCK (PC19), 3 VCC, 4 GND |
+| UART | header J3: 1 RX (PB17), 2 TX (PB16), 3 VCC, 4 GND; USART3. Not used yet |
+| IR | receiver CGQ1 (38 kHz) on PB19; IR LED D316, anode PB23 (TIM1 CH4) through 47 Ω, cathode PB21. Not used yet |
 
 ## Build
 
@@ -95,9 +101,12 @@ and every cathode to a PB pin. It fails if two LEDs share one slot.
 
 ## Flashing
 
-The board has no debug pads, so the only way in is USB-C, through the
-CH643's factory boot ROM (3328 bytes of system flash) and
-[wchisp](https://github.com/ch32-rs/wchisp) (`cargo install wchisp`).
+There are two ways in. With only a USB-C cable, through the CH643's
+factory boot ROM (3328 bytes of system flash) and
+[wchisp](https://github.com/ch32-rs/wchisp) (`cargo install wchisp`), as
+below. Or with a WCH-LinkE on the SWD header J4 (SWIO, SWCK, VCC, GND),
+which also gives a debugger. Pin 3 of J4 is the badge's VCC (battery or
+USB, up to about 5 V), not 3.3 V.
 wchisp lists the CH643 with USB and UART ISP support (`devices/0x24-CH643.yaml`).
 USB-C D+/D− go straight to PC17/PC16, the CH643's USB pins.
 
@@ -116,25 +125,23 @@ How the chip gets into the boot ROM (none of this is tested on a CH643 yet):
   application flash is empty. The CH32X035 has the same core and memory map
   as the CH643 (ch32-data uses one memory file for both). If the CH643 does
   the same, new badges can be flashed straight over USB.
-- **From firmware**: hold T1 + T4 for 3 s. The firmware does what WCH's
+- **From firmware**: hold ◀ + ▶ for 3 s. The firmware does what WCH's
   `SystemReset_StartMode(Start_Mode_BOOT)` does (set FLASH_STATR.BOOT_MODE
   after the BOOT_MODEKEYR keys) and resets; the boot ROM then starts.
   See `src/bootloader.rs` / `c/src/bootloader.c`.
 - **Pins**: on the CH32X035 the boot ROM runs when PC16 is low and PC17 is
-  high at power-on. The badge has nothing that pulls PC17 high, so this
-  needs a pad or button.
+  high at power-on. The badge has nothing that pulls PC17 high; with the
+  SWD header that is no longer needed.
 
-So a firmware that crashes before it can jump to the boot ROM bricks the
-badge, unless the chip also enters the boot ROM by itself. Before
-production, the hardware should get SWIO + GND test pads, and a pad or
-button that pulls PC17 (D+) high at power-on.
+A firmware that crashes before it can jump to the boot ROM no longer bricks
+the badge: the SWD header gets it back with a WCH-LinkE.
 
 ## Structure
 
 | File | What |
 |---|---|
 | `main.rs` | Embassy main: render loop at 30 fps, event channel, CHRG monitor task |
-| `touch.rs` | TouchKey polling task: press / tap / hold events, held pads, the T1 + T4 chord |
+| `buttons.rs` | Button polling task: debounce, press / tap / hold events, held buttons, the ◀ + ▶ chord |
 | `app.rs` | Menu, the list of screens, brightness, charging overlay |
 | `nametag.rs` | Name tag and Hacker Hotel 2027 screens, the `Name` type |
 | `editor.rs` | Name entry on the badge (EDIT NAME) |
@@ -156,7 +163,7 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 | | |
 |---|---|
 | `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it |
-| `tools/fwsim` | `cargo test` checks the name editor. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random touches in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
+| `tools/fwsim` | `cargo test` checks the name editor. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random presses in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
 | `tools/sim/fwgif.py` | Turns a `fwsim record` into a GIF on the board render |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
 | `tools/sim/games.py` | The first game mock-ups, played by a scripted AI |
@@ -173,9 +180,9 @@ flash are kept for the saved name.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os`, with USB | **24.3 KB** (39%) | 5.0 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` | 31.7 KB (51%) | 2.5 KB + stack |
-| Rust + Embassy, `opt-level = "s"` (default) | **35.2 KB** (57%) | 2.5 KB + stack |
+| C, GCC 15 `-Os`, with USB | **24.2 KB** (39%) | 5.0 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` | 31.6 KB (51%) | 2.5 KB + stack |
+| Rust + Embassy, `opt-level = "s"` (default) | **35.0 KB** (57%) | 2.5 KB + stack |
 
 Roughly where the C flash goes: animations 4.0 KB, Startris 2.5 KB, LED
 tables 2.2 KB, Snake 1.8 KB (its demo path search included), menu 1.5 KB,
@@ -196,7 +203,6 @@ more games either way.
   The dependency is pinned to commit `4fde792`, because CH643 support is not on
   crates.io yet.
 - The LED map is traced from the PCB nets.
-- The TouchKey sequence follows WCH's own EVT example.
 
 **Guessed** (each place is marked `GUESS` in the source)
 
@@ -213,17 +219,22 @@ more games either way.
   If the hardware block cannot be made to work, write a software scanner
   (GPIO + timer). Only `ledpwm.rs` would change, but check the GPIO
   sink-current limits first: one COM pin can sink up to 24 LEDs at once.
-- **Touch thresholds** (`PRESS_DELTA` / `RELEASE_DELTA`) are untuned. Log raw
-  values on a real board and set them.
 
 ## Hardware notes found along the way
 
-- **T2 may not work.** T2 is on ADC channel 11. The datasheet says channels 3, 7,
-  11 and 15 are missing on chips whose lot number has 0 as the 5th digit from
-  the end. Moving T2 to another TouchKey-capable pin avoids this.
-- **Unbonded pads.** WCH's SystemInit pulls up the pads that the LQFP64
-  package does not bond out (PC6–PC9, PC12, PC13, PC20); if they float they
-  draw current. ch32-hal does not do this, so `main.rs` does it.
+- **Unbonded and unused pads.** WCH's SystemInit pulls up the pads that the
+  LQFP64 package does not bond out (PC6–PC9, PC12, PC13, PC20); if they
+  float they draw current. ch32-hal does not do this, so `main.rs` does it,
+  and pulls up PC0–PC2 too, which the board leaves unconnected since the
+  touch pads went. PC3 (VBUS sense) must stay a floating input.
+- **IR receiver has no supply** (hardware commit c388024). Its VCC (through
+  R36) and the IR_RECV pull-up R35 are on a `+3.3V` net that nothing
+  drives: there is no regulator. Probably meant to be VCC.
+- **VBUS straight into PC3.** VCC is VBUS minus a Schottky drop, so PC3
+  sits a little above VDD while USB is in. A divider would be safer.
+- **IR LED current.** Two GPIOs drive the IR LED through 47 Ω; at a full
+  battery that is roughly 40–60 mA, likely more than a GPIO should source
+  or sink. Check the datasheet limit.
 - **No battery gauge.** The board has no battery-voltage sense, so the
   firmware can show *that* the battery charges but not *how full* it is.
 - **USB in Rust.** ch32-hal has no USB driver for the CH643, so only the C

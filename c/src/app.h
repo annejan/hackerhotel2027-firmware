@@ -8,7 +8,7 @@
 void app_init(const name_t *name);
 /* a name the user just saved, once, for main.c to keep in flash */
 bool app_saved_name(name_t *out);
-/* clear fb[] and render one frame; held = pads touched right now */
+/* clear fb[] and render one frame; held = buttons down right now (bit n = button n) */
 void app_render(uint8_t held);
 uint8_t app_brightness(void);
 

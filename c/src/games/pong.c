@@ -1,5 +1,5 @@
 /* Pong against the badge, same as ../../../src/games/pong.rs: your paddle
- * on the left edge (T1 up, T4 down, hold to keep moving), the badge's on
+ * on the left edge (◀ up, ▶ down, hold to keep moving), the badge's on
  * the right. First to 5 wins. The left arms show your points in blue, the
  * right arms the badge's in red. */
 #include <string.h>
@@ -50,9 +50,9 @@ bool pong_tick(bool demo, input_t in)
 
     if (demo)
         approach(&S.left, aim(0), t, 3);
-    else if (in.pressed & PAD_T1 || (in.held & PAD_T1 && t % 3 == 0))
+    else if (in.pressed & BTN_LEFT || (in.held & BTN_LEFT && t % 3 == 0))
         S.left = S.left - 1 < TOP ? TOP : S.left - 1;
-    else if (in.pressed & PAD_T4 || (in.held & PAD_T4 && t % 3 == 0))
+    else if (in.pressed & BTN_RIGHT || (in.held & BTN_RIGHT && t % 3 == 0))
         S.left = S.left + 1 > BOTTOM ? BOTTOM : S.left + 1;
     approach(&S.right, aim(1), t + 1, 3);
 

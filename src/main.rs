@@ -7,12 +7,14 @@
 //!       - 208 mono LEDs in a 17 x 16 grid in the centre
 //!       -  71 mono LEDs along the outline
 //!       -  35 RGB LEDs, 7 per arm (one PWM channel, three COMs each)
-//!   * touch pads T1..T4 on PC0..PC3 (TouchKey channels 10..13)
-//!   * LiPo charger XT4054, CHRG status on PB22
+//!   * four push buttons ◀ B A ▶ (PC5, PB20, PC4, PB18, active low; see buttons.rs)
+//!   * LiPo charger XT4054, CHRG status on PB22; VBUS sense on PC3
+//!   * not used yet: IR receiver (PB19), IR LED (PB23 anode, PB21 cathode),
+//!     UART header (USART3: PB16 TX, PB17 RX), SWD header (PC18 SWIO, PC19 SWCK)
 //!
 //! Tasks:
 //!   main loop      renders the current animation at FPS and hands frames to the display
-//!   touch::scan    polls the touch pads, sends Press/Tap/Hold/Bootloader events
+//!   buttons::scan  polls the buttons, sends Press/Tap/Hold/Bootloader events
 //!   charge_monitor watches CHRG, sends Charging events
 #![no_std]
 #![no_main]
@@ -20,6 +22,7 @@
 mod anim;
 mod app;
 mod bootloader;
+mod buttons;
 mod editor;
 mod font;
 mod frame;
@@ -29,7 +32,6 @@ mod generated;
 mod ledpwm;
 mod nametag;
 mod store;
-mod touch;
 
 use ch32_hal as hal;
 use embassy_executor::Spawner;
@@ -44,15 +46,15 @@ use frame::Frame;
 /// Things that happen to the badge, consumed by the render loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
-    /// Pad 0..=3 (T1..T4) touched; sent on touch-down, for games
+    /// Button 0..=3 (◀ B A ▶) pressed; sent on press-down, for games
     Press(u8),
-    /// Short touch on pad 0..=3, sent on release
+    /// Short press of button 0..=3, sent on release
     Tap(u8),
-    /// Touch held for `touch::HOLD_MS` on pad 0..=3
+    /// Button 0..=3 held for `buttons::HOLD_MS`
     Hold(u8),
     /// USB power present and battery charging
     Charging(bool),
-    /// T1 + T4 held for `touch::BOOT_MS`: reboot into the USB boot ROM
+    /// ◀ + ▶ held for `buttons::BOOT_MS`: reboot into the USB boot ROM
     Bootloader,
 }
 
@@ -75,15 +77,17 @@ async fn charge_monitor(chrg: Input<'static>) {
 /// Pads that exist on the die but are not bonded out in the LQFP64 package
 /// float and draw current unless pulled up. WCH's own SystemInit does this
 /// (GPIO_IPD_Unused); ch32-hal does not. CH643Q: PC6..PC9, PC12, PC13, PC20.
-fn pull_up_unbonded_pads() {
+/// PC0..PC2 are bonded but not connected on this board, so pull those up
+/// too. PC3 (VBUS sense, 100k to GND) must stay a floating input.
+fn pull_up_unused_pads() {
     use hal::pac::{GPIOC, RCC};
     RCC.apb2pcenr().modify(|w| w.set_iopcen(true));
     // input with pull-up = mode nibble 0b1000, pull selected by OUTDR = 1
-    GPIOC.cfglr().modify(|w| w.0 = (w.0 & 0x00FF_FFFF) | 0x8800_0000); // PC6, PC7
+    GPIOC.cfglr().modify(|w| w.0 = (w.0 & 0x00FF_F000) | 0x8800_0888); // PC0..PC2, PC6, PC7
     // CFGHR is not readable on early silicon (WCH keeps a shadow copy), so
     // write it whole: PC8, PC9, PC12, PC13 pull-up, the rest floating input
     GPIOC.cfghr().write(|w| w.0 = 0x4488_4488);
-    GPIOC.bshr().write(|w| w.0 = 1 << 6 | 1 << 7 | 1 << 8 | 1 << 9 | 1 << 12 | 1 << 13);
+    GPIOC.bshr().write(|w| w.0 = 0b111 | 1 << 6 | 1 << 7 | 1 << 8 | 1 << 9 | 1 << 12 | 1 << 13);
     GPIOC.cfgxr().modify(|w| w.0 = (w.0 & !(0xF << 16)) | 0x8 << 16); // PC20
     GPIOC.bsxr().write(|w| w.0 = 1 << 4);
 }
@@ -93,10 +97,17 @@ async fn main(spawner: Spawner) -> ! {
     let mut config = hal::Config::default();
     config.rcc = hal::rcc::Config::SYSCLK_FREQ_48MHZ_HSI;
     let p = hal::init(config);
-    pull_up_unbonded_pads();
+    pull_up_unused_pads();
 
     spawner.spawn(charge_monitor(Input::new(p.PB22, Pull::Up)).unwrap());
-    spawner.spawn(touch::scan(p.ADC1, p.PC0, p.PC1, p.PC2, p.PC3).unwrap());
+    // ◀ B A ▶; floating inputs, the pull-ups are on the board
+    let pins = [
+        Input::new(p.PC5, Pull::None),
+        Input::new(p.PB20, Pull::None),
+        Input::new(p.PC4, Pull::None),
+        Input::new(p.PB18, Pull::None),
+    ];
+    spawner.spawn(buttons::scan(pins).unwrap());
 
     // LEDPWM owns PA0..PA23 and PB0..PB15; nothing else may touch those pins.
     let mut display = ledpwm::LedPwm::new();
@@ -122,7 +133,7 @@ async fn main(spawner: Spawner) -> ! {
             store::save(&name); // a page erase and program: a few ms
         }
         frame.clear();
-        app.render(&mut frame, touch::held());
+        app.render(&mut frame, buttons::held());
         display.show(&frame, app.brightness());
         ticker.next().await;
     }

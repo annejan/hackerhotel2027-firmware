@@ -1,10 +1,10 @@
 //! Startris: a 9-wide, 14-deep well in the middle of the octagon.
-//! T1 left, T4 right (repeat when held), T3 rotate, T2 drop. The arms show
+//! ◀ left, ▶ right (repeat when held), A rotate, B drop. The arms show
 //! the next piece's colour and fill with cleared lines. The demo places
 //! each piece where a simple height/holes/bumpiness score likes it best.
 
 use crate::frame::{hsv, Frame, Rng};
-use crate::game::{arms_score, Input, Play, T1, T2, T3, T4};
+use crate::game::{arms_score, Input, Play, BTN_LEFT, BTN_B, BTN_A, BTN_RIGHT};
 use crate::generated::RGB;
 
 const W: i32 = 9;
@@ -50,7 +50,7 @@ pub struct Startris {
     lines: u16,
     clearing: u16, // rows being cleared, bit per row
     clear_t: u8,
-    rep: [u8; 2], // frames T1 / T4 held, for auto-repeat
+    rep: [u8; 2], // frames ◀ / ▶ held, for auto-repeat
     target: (u8, i32),
 }
 
@@ -237,21 +237,21 @@ impl Play for Startris {
             }
             return true;
         }
-        if inp.pressed & T3 != 0 {
+        if inp.pressed & BTN_A != 0 {
             self.rotate();
         }
-        for (k, pad, d) in [(0, T1, -1), (1, T4, 1)] {
-            if inp.pressed & pad != 0 {
+        for (k, btn, d) in [(0, BTN_LEFT, -1), (1, BTN_RIGHT, 1)] {
+            if inp.pressed & btn != 0 {
                 self.shift(d);
                 self.rep[k] = 0;
-            } else if inp.held & pad != 0 {
+            } else if inp.held & btn != 0 {
                 self.rep[k] = self.rep[k].saturating_add(1);
                 if self.rep[k] > 8 && self.rep[k] % 3 == 0 {
                     self.shift(d);
                 }
             }
         }
-        if inp.pressed & T2 != 0 {
+        if inp.pressed & BTN_B != 0 {
             return self.drop(rng);
         }
         self.fall += 1;

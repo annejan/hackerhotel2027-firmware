@@ -29,7 +29,7 @@ typedef struct {
     uint32_t fall;
     uint16_t lines, clearing; /* rows being cleared, bit per row */
     uint8_t clear_t;
-    uint8_t rep[2]; /* frames T1 / T4 held, for auto-repeat */
+    uint8_t rep[2]; /* frames ◀ / ▶ held, for auto-repeat */
     uint8_t target_rot;
     int target_c;
 } startris_t;

@@ -1,6 +1,6 @@
 /* Startris, same as ../../../src/games/startris.rs: a 9-wide, 14-deep well
- * in the middle of the octagon. T1 left, T4 right (repeat when held), T3
- * rotate, T2 drop. The arms show the next piece's colour and fill with
+ * in the middle of the octagon. ◀ left, ▶ right (repeat when held), A
+ * rotate, B drop. The arms show the next piece's colour and fill with
  * cleared lines. The demo places each piece where a simple
  * height/holes/bumpiness score likes it best. */
 #include <limits.h>
@@ -223,22 +223,22 @@ bool startris_tick(bool demo, input_t in)
         }
         return true;
     }
-    if (in.pressed & PAD_T3)
+    if (in.pressed & BTN_A)
         rotate();
-    static const uint8_t PAD[2] = {PAD_T1, PAD_T4};
+    static const uint8_t BTN[2] = {BTN_LEFT, BTN_RIGHT};
     for (int k = 0; k < 2; k++) {
         int d = k ? 1 : -1;
-        if (in.pressed & PAD[k]) {
+        if (in.pressed & BTN[k]) {
             shift(d);
             S.rep[k] = 0;
-        } else if (in.held & PAD[k]) {
+        } else if (in.held & BTN[k]) {
             if (S.rep[k] < 255)
                 S.rep[k]++;
             if (S.rep[k] > 8 && S.rep[k] % 3 == 0)
                 shift(d);
         }
     }
-    if (in.pressed & PAD_T2)
+    if (in.pressed & BTN_B)
         return drop();
     uint32_t speed = S.lines >= 16 ? 4 : 20u - S.lines;
     if (++S.fall >= speed) {

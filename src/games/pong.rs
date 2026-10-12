@@ -1,9 +1,9 @@
-//! Pong against the badge: your paddle on the left edge (T1 up, T4 down,
+//! Pong against the badge: your paddle on the left edge (◀ up, ▶ down,
 //! hold to keep moving), the badge's on the right. First to 5 wins. The
 //! left arms show your points in blue, the right arms the badge's in red.
 
 use crate::frame::{on_grid, Frame, Rgb, Rng};
-use crate::game::{approach, arm_fill, Input, Play, T1, T4};
+use crate::game::{approach, arm_fill, Input, Play, BTN_LEFT, BTN_RIGHT};
 use crate::generated::GRID_W;
 
 const ONE: i32 = 256;
@@ -77,9 +77,9 @@ impl Play for Pong {
         if demo {
             let aim = self.aim(0);
             approach(&mut self.left, aim, t, 3);
-        } else if inp.pressed & T1 != 0 || inp.held & T1 != 0 && t % 3 == 0 {
+        } else if inp.pressed & BTN_LEFT != 0 || inp.held & BTN_LEFT != 0 && t % 3 == 0 {
             self.left = (self.left - 1).max(TOP);
-        } else if inp.pressed & T4 != 0 || inp.held & T4 != 0 && t % 3 == 0 {
+        } else if inp.pressed & BTN_RIGHT != 0 || inp.held & BTN_RIGHT != 0 && t % 3 == 0 {
             self.left = (self.left + 1).min(BOTTOM);
         }
         let aim = self.aim(1);

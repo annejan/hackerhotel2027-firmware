@@ -1,11 +1,11 @@
 /* Name entry on the badge (EDIT NAME in the menu), same as
  * ../../src/editor.rs.
  *
- *   T1 / T4   previous / next character (hold to keep going)
- *   tap T3    next position; past the end it wraps to the start
- *   tap T2    previous position
- *   hold T3   save and show the name tag
- * Untouched for a minute, it closes without saving.
+ *   ◀ / ▶   previous / next character (hold to keep going)
+ *   tap A    next position; past the end it wraps to the start
+ *   tap B    previous position
+ *   hold A   save and show the name tag
+ * Left alone for a minute, it closes without saving.
  *
  * The grid shows the name with the character being edited in the middle,
  * bright, with a blinking underline; the outline shows the position. */
@@ -14,18 +14,18 @@
 #include "frame.h"
 #include "game.h"
 
-/* the characters T1 / T4 step through, in this order; from a blank, T4
+/* the characters ◀ / ▶ step through, in this order; from a blank, ▶
  * gives A */
 static const char CHARS[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.!?'*:/#@";
 #define NCHARS ((int)sizeof CHARS - 1)
 #define TIMEOUT (60 * FPS)
-#define REPEAT_AFTER 12 /* frames before a held pad repeats */
+#define REPEAT_AFTER 12 /* frames before a held button repeats */
 #define REPEAT_EVERY 4
 
 static struct {
     char buf[NAME_MAX];
     int cursor;
-    uint8_t rep[2]; /* frames T1 / T4 held */
+    uint8_t rep[2]; /* frames ◀ / ▶ held */
     uint32_t idle, t;
 } e;
 
@@ -85,9 +85,9 @@ edit_t editor_render(uint8_t held)
     e.t++;
     if (++e.idle > TIMEOUT)
         return EDIT_CANCEL;
-    static const uint8_t PAD[2] = {PAD_T1, PAD_T4};
+    static const uint8_t BTN[2] = {BTN_LEFT, BTN_RIGHT};
     for (int k = 0; k < 2; k++) {
-        if (held & PAD[k]) {
+        if (held & BTN[k]) {
             if (e.rep[k] < 255)
                 e.rep[k]++;
             if (e.rep[k] > REPEAT_AFTER && e.rep[k] % REPEAT_EVERY == 0)

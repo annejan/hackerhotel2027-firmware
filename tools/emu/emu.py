@@ -11,13 +11,15 @@ would on a real badge (C firmware only for now).
 
 The library holds the hardware-independent firmware (app, menu, games,
 animations; interface in badge_emu.h). This program stands in for the rest:
-the touch pads (with the same press / tap / hold / chord rules as touch.rs),
+the buttons (with the same press / tap / hold / chord rules as buttons.rs),
 the charger, and the LEDs, drawn on a KiCad render of the board.
 
-Keys: 1 2 3 4 or Left Down Up Right = T1 T2 T3 T4 (or click the pads),
+Keys: Left / Right = ◀ / ▶ (the front buttons), Up or A = A, Down or B = B
+(the buttons on the back), or click the buttons on the board.
 C = USB power on/off, R = reset, Esc = quit.
 """
 import ctypes
+import json
 import queue
 import sys
 import threading
@@ -37,11 +39,13 @@ import hh2027 as h  # noqa: E402
 
 GH, GW, NE, NR = 16, 17, 71, 35
 FRAME_BYTES = GH * GW + NE + NR * 3
-HOLD_MS, BOOT_MS = 600, 3000          # as touch.rs
+HOLD_MS, BOOT_MS = 600, 3000          # as buttons.rs
 PRESS, TAP, HOLD, CHARGING, BOOTLOADER = range(5)
 
-KEYS = {"1": 0, "2": 1, "3": 2, "4": 3, "Left": 0, "Down": 1, "Up": 2, "Right": 3}
-PAD_KEYS = ["1 / ←", "2 / ↓", "3 / ↑", "4 / →"]
+# button index: 0 ◀, 1 B, 2 A, 3 ▶ (see src/buttons.rs)
+KEYS = {"Left": 0, "Down": 1, "b": 1, "B": 1, "Up": 2, "a": 2, "A": 2, "Right": 3}
+BUTTON_NAMES = ["◀", "B", "A", "▶"]
+BUTTON_REFS = ["SW3", "SW1", "SW2", "SW4"]
 
 
 def find_lib(which):
@@ -143,32 +147,32 @@ class WebBridge:
             box["done"].set()
 
 
-class Touch:
-    """The pad logic of touch.rs: press on touch-down, tap on a short
-    release, hold after 600 ms, pads down together form a chord (no tap or
-    hold of their own), T1 + T4 for 3 s = boot ROM."""
+class Buttons:
+    """The button logic of buttons.rs: press on press-down, tap on a short
+    release, hold after 600 ms, buttons down together form a chord (no tap or
+    hold of their own), ◀ + ▶ for 3 s = boot ROM."""
 
     def __init__(self, send):
         self.send = send
-        self.down = [None] * 4          # time the pad went down
+        self.down = [None] * 4          # time the button went down
         self.chord = [False] * 4
         self.held_sent = [False] * 4
         self.boot_sent = False
 
-    def press(self, pad):
-        if self.down[pad] is None:
-            self.down[pad] = time.monotonic()
-            self.held_sent[pad] = False
-            self.send(PRESS, pad)
+    def press(self, btn):
+        if self.down[btn] is None:
+            self.down[btn] = time.monotonic()
+            self.held_sent[btn] = False
+            self.send(PRESS, btn)
 
-    def release(self, pad):
-        t0 = self.down[pad]
+    def release(self, btn):
+        t0 = self.down[btn]
         if t0 is None:
             return
-        self.down[pad] = None
-        if not self.chord[pad] and (time.monotonic() - t0) * 1000 < HOLD_MS:
-            self.send(TAP, pad)
-        self.chord[pad] = False
+        self.down[btn] = None
+        if not self.chord[btn] and (time.monotonic() - t0) * 1000 < HOLD_MS:
+            self.send(TAP, btn)
+        self.chord[btn] = False
 
     def poll(self):
         now = time.monotonic()
@@ -197,6 +201,7 @@ class FastRenderer:
 
     def __init__(self):
         self.L = L = h.Layout()
+        self.buttons = json.loads(h.LED_JSON.read_text()).get("buttons", [])
         base = h.Renderer(L)            # board render, dimmed, and its albedo
         self.base = base.base.astype(np.float32)
         albedo = base.albedo[:, :, 0]
@@ -244,7 +249,7 @@ class App:
     def __init__(self, fw, web=None):
         self.fw = fw
         self.web = web
-        self.touch = Touch(fw.event)
+        self.buttons = Buttons(fw.event)
         self.renderer = FastRenderer()
         self.charging = False
         self.message, self.message_until = "", 0
@@ -254,25 +259,34 @@ class App:
         root.title(f"HH2027 starfish badge — {fw.name} firmware")
         root.configure(bg="#111318")
         S = self.renderer.base.shape[0]
-        self.canvas = tk.Canvas(root, width=S, height=S + 88, bg="#111318", highlightthickness=0)
+        self.canvas = tk.Canvas(root, width=S, height=S + 72, bg="#111318", highlightthickness=0)
         self.canvas.pack()
         self.image_id = self.canvas.create_image(0, 0, anchor="nw")
-        self.pads = []
-        w = (S - 32 - 3 * 10) / 4
-        for i in range(4):
-            x0 = 16 + i * (w + 10)
-            r = self.canvas.create_rectangle(x0, S + 8, x0 + w, S + 40, outline="#5f6370", width=2)
-            t = self.canvas.create_text(x0 + w / 2, S + 24, text=f"T{i + 1}  ({PAD_KEYS[i]})",
-                                        fill="#aab0bc", font=("DejaVu Sans", 10, "bold"))
+        # the buttons where they are on the board; the two on the back
+        # (A, B) are drawn dashed, at the tips of the side arms
+        self.rings = []
+        L, where = self.renderer.L, {b["ref"]: b for b in self.renderer.buttons}
+        for i, ref in enumerate(BUTTON_REFS):
+            b = where.get(ref)
+            x, y = L.to_px(b["x"], b["y"]) if b else (40 + i * 40, S - 30)
+            back = bool(b and b["back"])
+            r = self.canvas.create_oval(x - 15, y - 15, x + 15, y + 15, outline="#5f6370", width=3,
+                                        dash=(4, 3) if back else None)
+            # labels above the back ones, beside the front ones (outwards)
+            tx, ty, anchor = (x, y - 20, "s") if back else (x - 20, y, "e") if x < S / 2 else (x + 20, y, "w")
+            t = self.canvas.create_text(tx, ty, anchor=anchor, fill="#c8ccd4",
+                                        text=BUTTON_NAMES[i] + (" (back)" if back else ""),
+                                        font=("DejaVu Sans", 11, "bold"))
             for item in (r, t):
-                self.canvas.tag_bind(item, "<ButtonPress-1>", lambda e, p=i: self.touch.press(p))
-                self.canvas.tag_bind(item, "<ButtonRelease-1>", lambda e, p=i: self.touch.release(p))
-            self.pads.append(r)
-        self.status = self.canvas.create_text(16, S + 56, anchor="w", fill="#c8ccd4",
+                self.canvas.tag_bind(item, "<ButtonPress-1>", lambda e, p=i: self.buttons.press(p))
+                self.canvas.tag_bind(item, "<ButtonRelease-1>", lambda e, p=i: self.buttons.release(p))
+            self.rings.append(r)
+        self.status = self.canvas.create_text(16, S + 20, anchor="w", fill="#c8ccd4",
                                               font=("DejaVu Sans", 9))
-        self.help = self.canvas.create_text(16, S + 74, anchor="w", fill="#7d838f", font=("DejaVu Sans", 9),
-                                            text="C: USB power  ·  R: reset  ·  hold T3: menu  ·  "
-                                                 "hold T1+T4 3 s: boot ROM  ·  Esc: quit")
+        self.help = self.canvas.create_text(16, S + 40, anchor="w", fill="#7d838f", font=("DejaVu Sans", 9),
+                                            text="keys: ← ◀  → ▶  ↑ or A: A  ↓ or B: B  ·  hold A: menu")
+        self.help2 = self.canvas.create_text(16, S + 58, anchor="w", fill="#7d838f", font=("DejaVu Sans", 9),
+                                             text="hold ◀+▶ 3 s: boot ROM  ·  C: USB power  ·  R: reset  ·  Esc: quit")
         root.bind("<KeyPress>", self.key_down)
         root.bind("<KeyRelease>", self.key_up)
         self.period = 1 / fw.fps
@@ -284,11 +298,11 @@ class App:
     # counts if no press follows within a few milliseconds.
     def key_down(self, e):
         if e.keysym in KEYS:
-            pad = KEYS[e.keysym]
-            pending = self.release_pending.pop(pad, None)
+            btn = KEYS[e.keysym]
+            pending = self.release_pending.pop(btn, None)
             if pending:
                 self.root.after_cancel(pending)
-            self.touch.press(pad)
+            self.buttons.press(btn)
         elif e.keysym.lower() == "c":
             self.charging = not self.charging
             self.fw.event(CHARGING, int(self.charging))
@@ -301,12 +315,12 @@ class App:
 
     def key_up(self, e):
         if e.keysym in KEYS:
-            pad = KEYS[e.keysym]
-            self.release_pending[pad] = self.root.after(40, lambda: self.key_released(pad))
+            btn = KEYS[e.keysym]
+            self.release_pending[btn] = self.root.after(40, lambda: self.key_released(btn))
 
-    def key_released(self, pad):
-        self.release_pending.pop(pad, None)
-        self.touch.release(pad)
+    def key_released(self, btn):
+        self.release_pending.pop(btn, None)
+        self.buttons.release(btn)
 
     def say(self, text, seconds=2.5):
         self.message, self.message_until = text, time.monotonic() + seconds
@@ -314,8 +328,8 @@ class App:
     def tick(self):
         if self.web:
             self.web.serve(self.fw)
-        self.touch.poll()
-        held = self.touch.held()
+        self.buttons.poll()
+        held = self.buttons.held()
         rebooted, frame = self.fw.render(held)
         if rebooted:
             self.say("USB boot ROM: ready for `wchisp flash` (powering on again)", 3)
@@ -326,9 +340,9 @@ class App:
         gain = max(.18, (b / 255) ** .45)
         self.photo = ImageTk.PhotoImage(self.renderer.render(frame, gain))
         self.canvas.itemconfigure(self.image_id, image=self.photo)
-        for i, r in enumerate(self.pads):
+        for i, r in enumerate(self.rings):
             on = held >> i & 1
-            self.canvas.itemconfigure(r, fill="#e0461e" if on else "", outline="#e0461e" if on else "#5f6370")
+            self.canvas.itemconfigure(r, outline="#e0461e" if on else "#5f6370", width=5 if on else 3)
 
         self.fps_n += 1
         now = time.monotonic()

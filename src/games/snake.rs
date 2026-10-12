@@ -1,9 +1,9 @@
 //! Snake on the 17 x 16 grid; the octagon's edge is the wall.
-//! T1 turns left, T4 turns right. The demo steers by the shortest path to
+//! ◀ turns left, ▶ turns right. The demo steers by the shortest path to
 //! the food. The arms fill green with the score.
 
 use crate::frame::{on_grid, Frame, Rgb, Rng};
-use crate::game::{arms_score, Input, Play, T1, T4};
+use crate::game::{arms_score, Input, Play, BTN_LEFT, BTN_RIGHT};
 use crate::generated::{EDGE, GRID_H, GRID_W};
 
 const CELLS: usize = GRID_H * GRID_W;
@@ -185,8 +185,8 @@ impl Play for Snake {
     }
 
     fn tick(&mut self, demo: bool, inp: Input, rng: &mut Rng) -> bool {
-        for (pad, turn) in [(T1, -1), (T4, 1)] {
-            if inp.pressed & pad != 0 && self.nturns < 2 {
+        for (btn, turn) in [(BTN_LEFT, -1), (BTN_RIGHT, 1)] {
+            if inp.pressed & btn != 0 && self.nturns < 2 {
                 self.turns[self.nturns] = turn;
                 self.nturns += 1;
             }

@@ -26,5 +26,7 @@ extern const slot_t EDGE[EDGE_LEDS];
 extern const rgb_led_t RGB[RGB_LEDS];
 /* (radius in 0.25 mm, angle in 1/256 turn, 0 = up, clockwise) */
 extern const uint8_t POLAR[SLOTS][2];
+/* the LED on each slot: D number, RGB colour in bits 13..12 (1 r, 2 g, 3 b), 0 = none */
+extern const uint16_t SLOT_REF[SLOTS];
 extern const uint8_t GAMMA[256];
 extern const uint8_t SIN8[256];

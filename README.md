@@ -26,6 +26,7 @@ every game, the name tag and the emulator. The short version:
 | Games | play themselves until you press ◀, ▶ or B |
 | **Hold ◀ + ▶, 3 s** | reboot into the USB boot ROM for flashing |
 | **B** on the name tag | send your name over infrared; a badge that gets it says HI with your name and sends its own back (C firmware) |
+| **Hold A + B, 3 s** | bring-up test for a new board: COM / PWM / LED walks with designators on the UART, scan rate, IR loopback, power (C firmware; [details](docs/USAGE.md#bring-up-test-first-boards)) |
 
 ◀ and ▶ are the two buttons on the front of the lower legs (thumbs), A and
 B the two on the back of the side arms (A right, B left).
@@ -69,7 +70,7 @@ receiver has no supply on the current board.
 
 **UART console.** The UART header J3 (115200 8N1) prints a log (boot,
 names saved, IR packets) and takes commands: `help`, `info`,
-`name TEXT`, `show N`, `level N`, `hello`.
+`name TEXT`, `show N`, `level N`, `hello`, `test`.
 
 Both work in the emulator: every C emulator on a PC shares one infrared
 "room" (UDP broadcast on 127.255.255.255:8028), so start two and press B
@@ -203,7 +204,7 @@ flash are kept for the saved name.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os`, with USB, IR and UART | **28.6 KB** (46%) | 6.4 KB + 2 KB stack |
+| C, GCC 15 `-Os`, with USB, IR, UART and the bring-up test | **32.0 KB** (52%) | 6.4 KB + 2 KB stack |
 | Rust + Embassy, `opt-level = "z"` | 31.9 KB (51%) | 3.1 KB + stack |
 | Rust + Embassy, `opt-level = "s"` (default) | **35.4 KB** (57%) | 3.1 KB + stack |
 

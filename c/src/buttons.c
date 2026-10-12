@@ -31,6 +31,13 @@ void buttons_init(void)
     GPIOB->CFGXR = (GPIOB->CFGXR & ~0x000F0F00u) | 0x00040400u;  /* PB18, PB20 */
 }
 
+/* both down, and the later one just reached BOOT_TICKS */
+static bool chord_held(int i, int j)
+{
+    const uint16_t a = buttons[i].ticks, b = buttons[j].ticks;
+    return buttons[i].down && buttons[j].down && (a < b ? a : b) == BOOT_TICKS;
+}
+
 void buttons_poll(void)
 {
     int down = 0;
@@ -71,7 +78,8 @@ void buttons_poll(void)
         }
     }
 
-    const uint16_t a = buttons[BUTTONS_BOOT_A].ticks, b = buttons[BUTTONS_BOOT_B].ticks;
-    if (buttons[BUTTONS_BOOT_A].down && buttons[BUTTONS_BOOT_B].down && (a < b ? a : b) == BOOT_TICKS)
+    if (chord_held(BUTTONS_BOOT_A, BUTTONS_BOOT_B))
         app_event(EV_BOOTLOADER, 0);
+    if (chord_held(BUTTONS_TEST_A, BUTTONS_TEST_B))
+        app_event(EV_SELFTEST, 0);
 }

@@ -184,9 +184,35 @@ and received. Type a command and Enter:
 | `show N` | show item N (`help` lists them; not EDIT NAME or LIGHT) |
 | `level N` | brightness, 0 (night) to 4 (full) |
 | `hello` | send the name over infrared, as B on the name tag does |
+| `test` | the [bring-up test](#bring-up-test-first-boards) |
 
 C firmware only. Pin 3 of J3 is the badge's VCC (battery or USB), not
 3.3 V: do not connect it to the adapter's supply.
+
+## Bring-up test (first boards)
+
+For checking a freshly built board (C firmware): **hold A + B for 3 s**,
+or type `test` on the UART console. Connect a serial terminal to J3 to
+see what each step should look like; every step and every button event
+is logged there. ◀ / ▶ go to the previous / next test, **hold A** leaves.
+
+| Test | On the badge | In the log |
+|---|---|---|
+| COM | all 24 PWM channels on one COM line, stepping PB0..PB15 twice a second | `COM PB3 on` |
+| PWM | one PWM channel on all COM lines, stepping PA0..PA23 | `PWM PA7 on` |
+| LED | one LED at a time, 4 a second. B pauses; while paused, tap A steps | `slot 41: PB1 PA17 D35 green` |
+| ALL | every LED on at the current brightness: measure the current here | the brightness level |
+| GRY | grey ramp left to right on the grid; arms red, green, blue, white, orange | |
+| KEY | the buttons held, as L, B, A, R | |
+| SCN | LED rows per second | `scan: 2930 rows/s` means the LED clock is the 48 MHz HCLK |
+| IR | sends a test packet every 2 s and counts how many it hears back (top: heard, bottom: sent) | `ir: heard 3 of 3 sent` |
+| PWR | USB or BAT, and CHG while charging | `power: USB (PC3 high), charging (CHRG low)` |
+
+The LED test names the designator of every slot (from the KiCad board),
+so a dead LED or a swapped net shows up as "D35 should be on". The scan
+rate checks the one timing guess in the LED driver. The IR test hears the
+badge's own LED, so it tests sender and receiver together (it needs the
+receiver's supply fixed, see the hardware notes).
 
 ## Setup page
 
@@ -233,7 +259,8 @@ make -C c emu && python3 tools/emu/emu.py c
 | `R` | Reset (power on again) |
 | `Esc` | Quit |
 
-The keys follow the same tap / hold / chord rules as the badge. To open the
+The keys follow the same tap / hold / chord rules as the badge. Hold `↑`
+and `↓` together for 3 s for the bring-up test (C firmware). To open the
 menu from a game, hold `↑` alone for 0.6 s. Hold `←` and `→`
 together for 3 s to see the USB boot screen. The emulator then powers the
 firmware on again. A name saved with EDIT NAME stays saved over `R` and the

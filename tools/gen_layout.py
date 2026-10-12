@@ -168,6 +168,15 @@ for l in rgb:
     for c in "rgb":
         pol[slot(l[c], l["pwm"])] = polar(l)
 
+# which LED each slot drives, for the bring-up test: D number, and for RGB
+# LEDs the colour in bits 13..12 (1 red, 2 green, 3 blue); 0 = no LED
+ref = [0] * (PWM * COM)
+for l in mono:
+    ref[slot(l["com"], l["pwm"])] = int(l["ref"][1:])
+for l in rgb:
+    for k, c in enumerate("rgb"):
+        ref[slot(l[c], l["pwm"])] = int(l["ref"][1:]) | (k + 1) << 12
+
 gamma = [round(255 * (i / 255) ** 2.2) for i in range(256)]
 sin8 = [round(127.5 + 127.5 * math.sin(2 * math.pi * i / 256)) for i in range(256)]
 
@@ -221,6 +230,10 @@ o.append("/// (radius in 0.25 mm, angle in 1/256 turn, 0 = up, clockwise).")
 o.append("pub const POLAR: [(u8, u8); SLOTS] = [")
 o.append(rows([f"({r}, {a})" for r, a in pol], 8))
 o.append("];\n")
+o.append("/// The LED on each slot: D number, RGB colour in bits 13..12 (1 r, 2 g, 3 b), 0 = none.")
+o.append("pub const SLOT_REF: [u16; SLOTS] = [")
+o.append(rows(ref, 16))
+o.append("];\n")
 o.append("/// 2.2 gamma, applied once when a frame is handed to the display.")
 o.append("pub const GAMMA: [u8; 256] = [")
 o.append(rows(gamma, 16))
@@ -263,6 +276,8 @@ h = [banner, "#pragma once", "#include <stdint.h>\n",
      "extern const rgb_led_t RGB[RGB_LEDS];",
      "/* (radius in 0.25 mm, angle in 1/256 turn, 0 = up, clockwise) */",
      "extern const uint8_t POLAR[SLOTS][2];",
+     "/* the LED on each slot: D number, RGB colour in bits 13..12 (1 r, 2 g, 3 b), 0 = none */",
+     "extern const uint16_t SLOT_REF[SLOTS];",
      "extern const uint8_t GAMMA[256];",
      "extern const uint8_t SIN8[256];"]
 c = [banner, '#include "generated.h"\n',
@@ -282,6 +297,9 @@ for l in rgb:
 c.append("};\n")
 c.append("const uint8_t POLAR[SLOTS][2] = {")
 c.append(crows([f"{{{r}, {a}}}" for r, a in pol], 8))
+c.append("};\n")
+c.append("const uint16_t SLOT_REF[SLOTS] = {")
+c.append(crows(ref, 16))
 c.append("};\n")
 c.append("const uint8_t GAMMA[256] = {")
 c.append(crows(gamma, 16))

@@ -4,7 +4,8 @@
  *   name TEXT        set the name (saved to flash, like EDIT NAME)
  *   show N           show item N (as the USB SET ITEM)
  *   level N          brightness 0..4
- *   hello            send the name over IR, as B on the name tag does */
+ *   hello            send the name over IR, as B on the name tag does
+ *   test             the bring-up test (selftest.h) */
 #pragma once
 
 #define CONSOLE_LINE 48

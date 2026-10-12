@@ -7,6 +7,7 @@ typedef enum {
     EV_HOLD,     /* button held for BUTTONS_HOLD_MS, arg = button */
     EV_CHARGING, /* arg = 1 while the battery charges */
     EV_BOOTLOADER, /* ◀ + ▶ held for BUTTONS_BOOT_MS: reboot into the USB boot ROM */
+    EV_SELFTEST,   /* A + B held for BUTTONS_BOOT_MS: the bring-up test (selftest.h) */
 } event_t;
 
 /* consumed by the app (app.c) */

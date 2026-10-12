@@ -28,6 +28,7 @@
 #include "irproto.h"
 #include "log.h"
 #include "nametag.h"
+#include "selftest.h"
 
 enum {
     NAME,
@@ -63,6 +64,7 @@ static struct {
     uint8_t boot_frames; /* > 0: showing the USB boot screen, then reboot */
     name_t name;
     bool editing;
+    bool testing;   /* the bring-up test has the screen and the buttons */
     bool has_saved; /* `saved` waits for main.c to keep it in flash */
     name_t saved;
     /* infrared */
@@ -148,9 +150,20 @@ void app_event(event_t ev, uint8_t arg)
         return;
     }
     a.idle = 0;
+    if (ev == EV_SELFTEST && !a.testing) {
+        app_selftest();
+        return;
+    }
+    if (a.testing && ev != EV_CHARGING) {
+        if (!selftest_event(ev, arg)) {
+            a.testing = false;
+            select_item(NAME);
+        }
+        return;
+    }
     if (ev == EV_CHARGING) {
         a.charging = arg;
-        a.show_charge = arg && !(is_game(a.item) && game_playing()) && !a.menu && !a.editing;
+        a.show_charge = arg && !(is_game(a.item) && game_playing()) && !a.menu && !a.editing && !a.testing;
         return;
     }
     if (a.menu) {
@@ -227,6 +240,13 @@ static void draw_menu(uint32_t t)
         }
 }
 
+void app_selftest(void)
+{
+    a.menu = a.editing = a.show_charge = a.greeting = false;
+    a.testing = true;
+    selftest_start();
+}
+
 bool app_ir_hello(void)
 {
     if (!ir_send(IR_HELLO, (const uint8_t *)a.name.s, a.name.len))
@@ -239,6 +259,11 @@ bool app_ir_hello(void)
 void app_ir_received(uint8_t type, const uint8_t *data, int len)
 {
     name_t name;
+    if (type == IR_TEST) {
+        if (a.testing)
+            selftest_ir(data, len);
+        return;
+    }
     if (type != IR_HELLO && type != IR_REPLY)
         return;
     name_set(&name, (const char *)data, len);
@@ -289,7 +314,7 @@ static void ir_tick(void)
         else
             a.reply_in = 1; /* still sending something: next frame */
     }
-    bool busy = a.menu || a.editing || (is_game(a.item) && game_playing());
+    bool busy = a.menu || a.editing || a.testing || (is_game(a.item) && game_playing());
     if (a.greet_pending && !busy) {
         a.greet_pending = false;
         a.greeting = true;
@@ -312,6 +337,10 @@ void app_render(uint8_t held)
         return;
     }
     uint32_t t = a.t++;
+    if (a.testing) {
+        selftest_render(held);
+        return;
+    }
     if (a.menu) {
         if (++a.idle > MENU_TIMEOUT)
             a.menu = false;

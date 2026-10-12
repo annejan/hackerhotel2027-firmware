@@ -80,7 +80,7 @@ clean:
 # The hardware-independent part as a shared library for the emulator,
 # built with the host compiler (see ../tools/emu/badge_emu.h).
 HOSTCC   ?= cc
-EMU_SRCS := src/app.c src/anim.c src/console.c src/editor.c src/frame.c src/generated.c src/game.c src/irproto.c src/proto.c \
+EMU_SRCS := src/app.c src/anim.c src/console.c src/editor.c src/frame.c src/generated.c src/game.c src/irproto.c src/proto.c src/selftest.c \
             $(wildcard src/games/*.c) src/nametag.c emu/emu.c
 
 emu: build/libhh27.so

@@ -15,11 +15,18 @@
 #include "ir.h"
 #include "log.h"
 #include "ledpwm.h"
+#include "selftest.h"
 #include "store.h"
 #include "uart.h"
 #include "usb.h"
 
 #define CHRG_PIN 22 /* PB22, XT4054 CHRG: open-drain, low while charging */
+
+/* PC3 sees VBUS (through R33 to GND): high while USB powers the badge */
+bool board_vbus(void)
+{
+    return GPIOC->INDR & (1u << 3);
+}
 
 static inline uint32_t ticks(void)
 {

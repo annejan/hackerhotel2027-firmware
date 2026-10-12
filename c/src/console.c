@@ -54,7 +54,7 @@ void console_line(const char *line)
     while (*line == ' ')
         line++;
     if (is(line, "help", &arg)) {
-        log_line("info | name TEXT | show N | level N | hello");
+        log_line("info | name TEXT | show N | level N | hello | test");
         for (int i = 0; i < app_items(); i++) {
             log_str("  ");
             log_u32((uint32_t)i);
@@ -73,6 +73,8 @@ void console_line(const char *line)
     } else if (is(line, "level", &arg) && number(arg, &n) && n < app_levels()) {
         app_set_level((uint8_t)n);
         info();
+    } else if (is(line, "test", &arg)) {
+        app_selftest();
     } else if (is(line, "hello", &arg)) {
         if (!app_ir_hello())
             log_line("ir: busy");

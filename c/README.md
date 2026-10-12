@@ -4,9 +4,10 @@ Same firmware as the Rust one in `../src`: LED map, LEDPWM driver (from
 the reference manual, same as Rust), the buttons, CHRG, the menu, the name tag with name entry (kept in
 flash), the hotel screen, the animations, all six games, the ◀ + ▶
 reboot into the USB boot ROM, a USB device for the WebUSB setup page
-(`src/usb.c`, `src/proto.c`), and infrared name swapping with a UART log
-and console (`src/ir.c`, `src/irproto.c`, `src/uart.c`, `src/console.c`);
-those last two features are C only so far.
+(`src/usb.c`, `src/proto.c`), infrared name swapping with a UART log
+and console (`src/ir.c`, `src/irproto.c`, `src/uart.c`, `src/console.c`),
+and a bring-up test for new boards (`src/selftest.c`); those are C only
+so far.
 It is plain C on registers, with no WCH peripheral library and no libc. It runs as one
 super-loop scheduled on a free-running SysTick. Interrupts: the LED
 scanner at the end of each row, and for infrared the SysTick compare
@@ -25,11 +26,12 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 ## Size compared with Rust
 
-C has USB, infrared and the UART console on top; Rust does not have them yet.
+C has USB, infrared, the UART console and the bring-up test (2.8 KB, plus
+0.75 KB for the slot-to-designator table) on top; Rust does not have them yet.
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR and the UART console | 28.6 KB | 6.4 KB (+ 2 KB stack) |
+| C, with USB, IR, the UART console and the bring-up test | 32.0 KB | 6.4 KB (+ 2 KB stack) |
 | Rust + Embassy, `opt-level = "s"` | 35.4 KB | 3.1 KB (+ stack) |
 | Rust + Embassy, `opt-level = "z"` | 31.9 KB | 3.1 KB (+ stack) |
 
@@ -46,9 +48,10 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | Module | Code | Static RAM |
 |---|---|---|
 | anim (7 animations) | 3960 | 442 |
-| app (menu, greeting) | 3378 | 112 |
+| app (menu, greeting) | 3566 | 112 |
+| generated (LED tables, slot designators) | 3014 | 0 |
+| selftest (bring-up test) | 2834 | 44 |
 | games/startris | 2556 | 0 |
-| generated (LED tables) | 2246 | 0 |
 | games/snake | 1788 | 688 |
 | usb (driver, descriptors) | 1737 | 326 |
 | games/pong | 1290 | 0 |
@@ -57,14 +60,14 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | games/chase | 1230 | 0 |
 | game (shell) | 1228 | 516 |
 | games/breakout | 1102 | 0 |
-| ir (send, receive) | 1022 | 222 |
-| console | 942 | 0 |
+| ir (send, receive) | 1058 | 223 |
+| console | 998 | 0 |
 | editor (EDIT NAME) | 850 | 40 |
 | games/flappy | 718 | 0 |
 | irproto (packets, pulse decoder) | 698 | 0 |
-| main | 543 | 0 |
+| buttons | 574 | 25 |
+| main | 555 | 0 |
 | proto (USB commands) | 530 | 0 |
 | uart (log, line input) | 524 | 566 |
-| buttons | 522 | 25 |
+| ledpwm (scanner interrupt, row buffers) | 520 | 1031 |
 | store (name in flash) | 506 | 0 |
-| ledpwm (scanner interrupt, row buffers) | 496 | 1027 |

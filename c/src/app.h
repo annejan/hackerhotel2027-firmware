@@ -30,3 +30,5 @@ bool app_charging(void);
 void app_ir_received(uint8_t type, const uint8_t *data, int len);
 /* send our name over IR, as B on the name tag does; false while busy */
 bool app_ir_hello(void);
+/* the bring-up test (selftest.h), as A + B held for 3 s starts it */
+void app_selftest(void);

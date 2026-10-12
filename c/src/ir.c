@@ -35,6 +35,8 @@
 static uint32_t ticks_per_us; /* SysTick runs on HCLK/8 */
 static uint16_t carrier_on;   /* TIM1 compare value for 1/3 duty */
 
+static bool loopback; /* hear our own packets (bring-up test) */
+
 static struct {
     volatile bool busy;
     uint8_t buf[IR_PACKET_MAX];
@@ -98,6 +100,12 @@ bool ir_busy(void)
     return tx.busy;
 }
 
+void ir_loopback(bool on)
+{
+    loopback = on;
+    ir_dec_reset(&rx.dec);
+}
+
 /* segments: 0 header mark, 1 header space, then a mark and a space per
  * bit, then the end mark */
 static void next_segment(void)
@@ -120,7 +128,7 @@ static void next_segment(void)
         TIM1->SWEVGR = TIM_UG;
         TIM1->CTLR1 = 0;
         rx.mute_until = (uint32_t)SysTick->CNT + ECHO_US * ticks_per_us;
-        rx.muted = true;
+        rx.muted = !loopback;
         tx.busy = false;
         return;
     }
@@ -161,7 +169,7 @@ IRQ void EXTI25_16_IRQHandler(void)
     bool low = !(GPIOB->INDR & (1u << RECV_PIN));
     uint32_t us = (now - rx.last) / ticks_per_us;
     rx.last = now;
-    if (tx.busy || rx.muted)
+    if (!loopback && (tx.busy || rx.muted))
         return;
     /* the interval that just ended: a space if the output is low now */
     uint16_t v = (uint16_t)(us > 0x7FFF ? 0x7FFF : us) | (low ? 0 : 0x8000);

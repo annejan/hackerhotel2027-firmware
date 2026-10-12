@@ -16,6 +16,7 @@ enum {
     EMU_HOLD = 2,       /* arg = button, held 600 ms */
     EMU_CHARGING = 3,   /* arg = 1 while charging */
     EMU_BOOTLOADER = 4, /* ◀ + ▶ held 3 s */
+    EMU_SELFTEST = 5,   /* A + B held 3 s: the bring-up test (C firmware) */
 };
 
 /* one frame: grid (16 rows x 17 columns, 0 where the octagon has no LED),

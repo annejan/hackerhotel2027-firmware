@@ -15,8 +15,11 @@
 #include "irproto.h"
 #include "log.h"
 #include "proto.h"
+#include "selftest.h"
 
 #define EXPORT __attribute__((visibility("default")))
+
+EXPORT void emu_ir_rx(const uint8_t *in, int len);
 
 static jmp_buf boot_rom;
 /* the name EDIT NAME saved; kept over emu_init like the badge's flash */
@@ -45,15 +48,31 @@ EXPORT uint8_t emu_brightness(void) { return app_brightness(); }
 
 EXPORT void emu_event(uint8_t kind, uint8_t arg)
 {
-    static const event_t map[] = {EV_PRESS, EV_TAP, EV_HOLD, EV_CHARGING, EV_BOOTLOADER};
+    static const event_t map[] = {EV_PRESS, EV_TAP, EV_HOLD, EV_CHARGING, EV_BOOTLOADER, EV_SELFTEST};
     if (kind < sizeof map / sizeof map[0])
         app_event(map[kind], arg);
 }
+
+/* hardware the bring-up test looks at */
+static uint32_t rows;    /* LED rows shown: 2930 a second, as on the badge */
+static bool ir_loop;     /* ir_loopback(): our packets come back */
+static uint8_t ir_echo[IR_PACKET_MAX];
+static int ir_echo_len;
+
+uint32_t ledpwm_rows(void) { return rows; }
+void ir_loopback(bool on) { ir_loop = on; }
+bool board_vbus(void) { return app_charging(); }
 
 EXPORT uint32_t emu_render(uint8_t held, uint8_t *out)
 {
     if (setjmp(boot_rom))
         return 1;
+    rows += 2930 / FPS;
+    if (ir_echo_len) { /* the loopback packet, a frame later */
+        int n = ir_echo_len;
+        ir_echo_len = 0;
+        emu_ir_rx(ir_echo, n);
+    }
     app_render(held);
     if (app_saved_name(&flash_name))
         has_flash_name = true;
@@ -106,6 +125,10 @@ bool ir_send(uint8_t type, const uint8_t *data, int len)
     if (ir_out_len)
         return false;
     ir_out_len = ir_pack(type, data, len, ir_out);
+    if (ir_loop && ir_out_len) {
+        memcpy(ir_echo, ir_out, (size_t)ir_out_len);
+        ir_echo_len = ir_out_len;
+    }
     return ir_out_len > 0;
 }
 

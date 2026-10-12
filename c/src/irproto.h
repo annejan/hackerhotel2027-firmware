@@ -29,6 +29,7 @@
 enum {
     IR_HELLO = 'H', /* data = the sender's name; please reply */
     IR_REPLY = 'R', /* data = the sender's name, answering a HELLO */
+    IR_TEST = 'T',  /* the bring-up test's loopback packet */
 };
 
 /* builds a packet in out[IR_PACKET_MAX]; returns its length, or 0 when

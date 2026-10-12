@@ -49,6 +49,12 @@
 static uint32_t rows[2][COMS][ROW_WORDS] __attribute__((aligned(4)));
 static volatile uint8_t front, com;
 static volatile bool pending;
+static volatile uint32_t row_count;
+
+uint32_t ledpwm_rows(void)
+{
+    return row_count;
+}
 
 static void load_row(uint8_t c)
 {
@@ -60,6 +66,7 @@ static void load_row(uint8_t c)
 
 IRQ void LEDPWM_IRQHandler(void)
 {
+    row_count++;
     uint8_t c = (uint8_t)(com + 1);
     if (c == COMS) {
         c = 0;

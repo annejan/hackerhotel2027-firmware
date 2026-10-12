@@ -13,6 +13,9 @@ void ir_init(void);
  * len is more than IR_DATA_MAX. About 0.26 s for a 24-character name. */
 bool ir_send(uint8_t type, const uint8_t *data, int len);
 bool ir_busy(void);
+/* true: also receive what we send (the bring-up test); normally our own
+ * echo is ignored */
+void ir_loopback(bool on);
 /* decode what came in since the last call; each good packet goes to
  * app_ir_received(). Call it often (every few ms). */
 void ir_poll(void);

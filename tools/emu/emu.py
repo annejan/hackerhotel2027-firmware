@@ -47,7 +47,7 @@ import hh2027 as h  # noqa: E402
 GH, GW, NE, NR = 16, 17, 71, 35
 FRAME_BYTES = GH * GW + NE + NR * 3
 HOLD_MS, BOOT_MS = 600, 3000          # as buttons.rs
-PRESS, TAP, HOLD, CHARGING, BOOTLOADER = range(5)
+PRESS, TAP, HOLD, CHARGING, BOOTLOADER, SELFTEST = range(6)
 
 # button index: 0 ◀, 1 B, 2 A, 3 ▶ (see src/buttons.rs)
 KEYS = {"Left": 0, "Down": 1, "b": 1, "B": 1, "Up": 2, "a": 2, "A": 2, "Right": 3}
@@ -218,14 +218,15 @@ class StdinConsole:
 class Buttons:
     """The button logic of buttons.rs: press on press-down, tap on a short
     release, hold after 600 ms, buttons down together form a chord (no tap or
-    hold of their own), ◀ + ▶ for 3 s = boot ROM."""
+    hold of their own), ◀ + ▶ for 3 s = boot ROM, A + B for 3 s = the
+    bring-up test."""
 
     def __init__(self, send):
         self.send = send
         self.down = [None] * 4          # time the button went down
         self.chord = [False] * 4
         self.held_sent = [False] * 4
-        self.boot_sent = False
+        self.chord_sent = {}
 
     def press(self, btn):
         if self.down[btn] is None:
@@ -252,12 +253,13 @@ class Buttons:
             if not self.chord[p] and not self.held_sent[p] and (now - self.down[p]) * 1000 >= HOLD_MS:
                 self.held_sent[p] = True
                 self.send(HOLD, p)
-        if self.down[0] is not None and self.down[3] is not None:
-            if not self.boot_sent and (now - max(self.down[0], self.down[3])) * 1000 >= BOOT_MS:
-                self.boot_sent = True
-                self.send(BOOTLOADER, 0)
-        else:
-            self.boot_sent = False
+        for (i, j), event in (((0, 3), BOOTLOADER), ((2, 1), SELFTEST)):
+            if self.down[i] is not None and self.down[j] is not None:
+                if not self.chord_sent.get(event) and (now - max(self.down[i], self.down[j])) * 1000 >= BOOT_MS:
+                    self.chord_sent[event] = True
+                    self.send(event, 0)
+            else:
+                self.chord_sent[event] = False
 
     def held(self):
         return sum(1 << p for p in range(4) if self.down[p] is not None)

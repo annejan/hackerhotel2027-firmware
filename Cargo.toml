@@ -1,0 +1,27 @@
+[package]
+name = "hh27-starfish"
+version = "0.1.0"
+edition = "2021"
+description = "Theoretical Embassy firmware for the Hacker Hotel 2027 starfish badge (WCH CH643Q)"
+license = "MIT"
+
+[dependencies]
+# CH643 support landed in ch32-hal but is not on crates.io yet; pin the commit this was written against.
+ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal", rev = "4fde79288cc052cfb59a0677de403b1ea0e03c09", features = [
+    "ch643",
+    "memory-x",
+    "embassy",
+    "rt",
+] }
+embassy-executor = { version = "0.10.0", features = ["platform-spin", "executor-thread"] }
+embassy-time = "0.5.1"
+embassy-sync = "0.8.0"
+qingke = "0.8"
+qingke-rt = "0.8"
+
+[profile.release]
+strip = false     # symbols are not flashed, keep them for debugging
+lto = true
+opt-level = "s"
+debug = true
+codegen-units = 1

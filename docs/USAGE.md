@@ -150,6 +150,44 @@ make -C c NAME="ANNE JAN"                        # C
 The font has upper-case letters, digits and ` !'*-.:?/#@`. Lower case shows
 as upper case. Names up to 3 characters stand still. Longer names scroll.
 
+## Meeting other badges (infrared)
+
+On the name tag, **tap B** to send your name over infrared. Point the top
+of your badge, where the IR LED and receiver sit, at the other badge. A
+white wave runs out along your arms while it sends (about a quarter of a
+second).
+
+The badge that receives it shows **HI**, then your name, with colours
+running round its arms, and sends its own name back; your badge then
+greets that one the same way. So one tap and both badges know who they
+met. Tap any button to close a greeting early.
+
+A greeting waits while the menu or EDIT NAME is open or a game is being
+played, and shows when you are done. The answer goes out straight away.
+
+This is in the C firmware only so far, and not tested on a badge. On the
+current board the IR receiver has no supply (see the
+[hardware notes](../README.md#hardware-notes-found-along-the-way)), so
+receiving needs a board fix first.
+
+## UART console
+
+The UART header J3 (pin 1 RX, pin 2 TX, pin 4 GND; 115200 baud, 8N1)
+prints a log: the name at power on, names saved, infrared packets sent
+and received. Type a command and Enter:
+
+| Command | |
+|---|---|
+| `help` | the commands and the list of items |
+| `info` | firmware, name, what is showing, brightness |
+| `name TEXT` | set the name, saved in flash like EDIT NAME |
+| `show N` | show item N (`help` lists them; not EDIT NAME or LIGHT) |
+| `level N` | brightness, 0 (night) to 4 (full) |
+| `hello` | send the name over infrared, as B on the name tag does |
+
+C firmware only. Pin 3 of J3 is the badge's VCC (battery or USB), not
+3.3 V: do not connect it to the adapter's supply.
+
 ## Setup page
 
 Plug the badge into a computer and open the setup page,
@@ -200,6 +238,12 @@ menu from a game, hold `↑` alone for 0.6 s. Hold `←` and `→`
 together for 3 s to see the USB boot screen. The emulator then powers the
 firmware on again. A name saved with EDIT NAME stays saved over `R` and the
 reboot, as it would in flash. It is lost when you close the emulator.
+
+With the C firmware, every emulator on the PC shares one infrared "room"
+(UDP broadcast on 127.255.255.255:8028; `--no-ir` leaves it). Start two,
+press `B` on one's name tag, and they swap names. Lines typed into the
+terminal go to the badge's UART console (try `help`), and the badge's log
+appears there too.
 
 With `--web` (C firmware), the emulator also serves the setup page on
 <http://localhost:8027/>. Click **Connect emulator** there: the page then

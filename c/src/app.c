@@ -11,15 +11,22 @@
  * EDIT NAME: see editor.c; the new name comes out of app_saved_name() for
  * main.c to keep in flash.
  * Games: demo mode until you press ◀, B or ▶; then the game owns the
- * buttons (see games/). */
+ * buttons (see games/).
+ * Infrared: B on the name tag sends the name (HELLO). A badge that gets a
+ * HELLO greets the sender ("HI" and the name) and answers with its own
+ * name (REPLY), which greets back; so one press swaps names. */
 #include <stdbool.h>
 #include <string.h>
 #include "anim.h"
 #include "app.h"
 #include "bootloader.h"
 #include "editor.h"
+#include "font.h"
 #include "frame.h"
 #include "game.h"
+#include "ir.h"
+#include "irproto.h"
+#include "log.h"
 #include "nametag.h"
 
 enum {
@@ -46,6 +53,8 @@ static const char *const LABELS[ITEMS] = {
  * night, 5%, 12.5% (the default), 31%, full */
 static const uint8_t LEVELS[5] = {4, 12, 32, 80, 255};
 #define MENU_TIMEOUT (20 * FPS)
+#define GREET_HI FPS /* "HI" first, then the name */
+#define GREET_MIN (4 * FPS)
 
 static struct {
     uint8_t item, cursor, level;
@@ -56,6 +65,13 @@ static struct {
     bool editing;
     bool has_saved; /* `saved` waits for main.c to keep it in flash */
     name_t saved;
+    /* infrared */
+    uint8_t beam;      /* > 0: frames left of the "sending" sweep on the arms */
+    uint8_t reply_in;  /* > 0: frames until we answer a HELLO */
+    bool greet_pending, greeting;
+    uint32_t greet_t, greet_frames;
+    name_t greet;      /* the other badge's name */
+    uint16_t met;      /* HELLOs and REPLYs since power on */
 } a;
 
 static bool is_game(int i)
@@ -158,9 +174,13 @@ void app_event(event_t ev, uint8_t arg)
             editor_done(done, &name);
         return;
     }
-    if (a.show_charge) {
+    if (a.greeting || a.show_charge) {
         if (ev == EV_TAP)
-            a.show_charge = false;
+            a.greeting = a.show_charge = false;
+        return;
+    }
+    if (a.item == NAME && ev == EV_TAP && arg == 1) {
+        app_ir_hello();
         return;
     }
     if (is_game(a.item) && game_event(ev, arg))
@@ -207,9 +227,84 @@ static void draw_menu(uint32_t t)
         }
 }
 
+bool app_ir_hello(void)
+{
+    if (!ir_send(IR_HELLO, (const uint8_t *)a.name.s, a.name.len))
+        return false;
+    a.beam = FPS;
+    log_line("ir: hello sent");
+    return true;
+}
+
+void app_ir_received(uint8_t type, const uint8_t *data, int len)
+{
+    name_t name;
+    if (type != IR_HELLO && type != IR_REPLY)
+        return;
+    name_set(&name, (const char *)data, len);
+    if (!name.len)
+        return;
+    a.met++;
+    log_str(type == IR_HELLO ? "ir: hello from " : "ir: reply from ");
+    log_line(name.s);
+    if (type == IR_HELLO)
+        a.reply_in = (uint8_t)(3 + rng_next() % 6); /* 0.1 to 0.3 s: let their receiver settle */
+    a.greet = name;
+    a.greet_pending = true;
+}
+
+/* "HI", then the other badge's name where the name tag has its own;
+ * colours run round the arms */
+static void draw_greeting(uint32_t t)
+{
+    int w = text_width(a.greet.s);
+    if (t < GREET_HI)
+        draw_text("HI", (GRID_W - text_width("HI")) / 2, 4, 255);
+    else if (w <= GRID_W)
+        draw_text(a.greet.s, (GRID_W - w) / 2, 4, 255);
+    else /* scrolls by once, at the name tag's speed */
+        draw_text(a.greet.s, GRID_W - (int)((t - GREET_HI) * 10 / FPS), 4, 255);
+    for (int i = 0; i < RGB_LEDS; i++)
+        fb_rgb(i, hsv((uint8_t)(RGB[i].arm * 51 + RGB[i].rank * 12 - t * 6), 255, 200));
+    for (int j = 0; j < EDGE_LEDS; j++)
+        fb[EDGE[j]] = (uint8_t)((j * 7 - t * 3) % 71 < 10 ? 200 : 20);
+}
+
+/* sending: a white wave runs out along the arms */
+static void draw_beam(void)
+{
+    int front = (FPS - a.beam) * 9 / FPS; /* rank of the wave, 0..8 */
+    for (int i = 0; i < RGB_LEDS; i++) {
+        int d = front - RGB[i].rank;
+        if (d >= 0 && d < 3)
+            fb_rgb(i, rgb_scaled((rgb_t){200, 220, 255}, (uint8_t)(255 - d * 80)));
+    }
+}
+
+static void ir_tick(void)
+{
+    if (a.reply_in && --a.reply_in == 0) {
+        if (ir_send(IR_REPLY, (const uint8_t *)a.name.s, a.name.len))
+            log_line("ir: reply sent");
+        else
+            a.reply_in = 1; /* still sending something: next frame */
+    }
+    bool busy = a.menu || a.editing || (is_game(a.item) && game_playing());
+    if (a.greet_pending && !busy) {
+        a.greet_pending = false;
+        a.greeting = true;
+        a.show_charge = false;
+        a.greet_t = 0;
+        /* long names scroll: stay until the name has gone by once */
+        int w = text_width(a.greet.s);
+        a.greet_frames = GREET_HI + (w <= GRID_W ? GREET_MIN : (uint32_t)(GRID_W + w) * FPS / 10);
+    }
+}
+
 void app_render(uint8_t held)
 {
     memset(fb, 0, sizeof fb);
+    ir_tick();
     if (a.boot_frames) {
         if (--a.boot_frames == 0)
             reboot_to_boot_rom();
@@ -229,12 +324,24 @@ void app_render(uint8_t held)
             editor_done(done, &a.name);
         return;
     }
+    if (a.greeting) {
+        draw_greeting(a.greet_t);
+        if (++a.greet_t >= a.greet_frames)
+            a.greeting = false;
+        return;
+    }
     if (a.show_charge) {
         anim_charging(t);
         return;
     }
     switch (a.item) {
-    case NAME: nametag_name(t, &a.name); break;
+    case NAME:
+        nametag_name(t, &a.name);
+        if (a.beam) {
+            draw_beam();
+            a.beam--;
+        }
+        break;
     case HOTEL: nametag_hotel(t); break;
     case RIPPLE: anim_ripple(t); break;
     case GALAXY: anim_galaxy(t); break;
@@ -260,7 +367,7 @@ bool app_set_item(uint8_t i)
 {
     if (i >= ITEMS || i == EDIT_NAME || i == LIGHT)
         return false;
-    a.menu = a.editing = a.show_charge = false;
+    a.menu = a.editing = a.show_charge = a.greeting = false;
     select_item(i);
     return true;
 }

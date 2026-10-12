@@ -25,3 +25,8 @@ void app_name(name_t *out);
 /* use this name from now on, and hand it to main.c to keep in flash */
 void app_set_name(const name_t *name);
 bool app_charging(void);
+
+/* infrared (ir.c, or the emulator): a packet from another badge */
+void app_ir_received(uint8_t type, const uint8_t *data, int len);
+/* send our name over IR, as B on the name tag does; false while busy */
+bool app_ir_hello(void);

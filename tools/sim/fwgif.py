@@ -3,7 +3,7 @@
 
   (cd tools/fwsim && cargo run -- record ../../rec.bin 300 10:tap3)
   python3 tools/sim/fwgif.py rec.bin out.gif "TITLE" "subtitle" [--buttons=a,b,c,d]
-                              [--width=PX] [--skip=FRAMES]
+                              [--width=PX] [--skip=FRAMES] [--step=N]
 
 Each recorded frame is the grid (16 x 17), the outline (71), the RGB LEDs
 by (arm, rank) (35 x 3), a byte of button state (bits 0-3 held, 4-7 pressed)
@@ -28,7 +28,8 @@ def main(args):
     GH, GW, NE, NR = L.GH, L.GW, len(L.edge), L.nr
     size = GH * GW + NE + NR * 3 + 2
     raw = np.fromfile(rec, np.uint8)
-    raw = raw[: len(raw) // size * size].reshape(-1, size)[int(opts.get("skip", 0)):]
+    step = int(opts.get("step", 1))           # keep every step-th frame (smaller GIF)
+    raw = raw[: len(raw) // size * size].reshape(-1, size)[int(opts.get("skip", 0))::step]
     rgb_index = [int(np.nonzero((L.arm == k // 7) & (L.rank == k % 7))[0][0]) for k in range(NR)]
     frames = []
     for row in raw:
@@ -46,7 +47,7 @@ def main(args):
     if width != h.S:
         from PIL import Image
         frames = [f.resize((width, round(width * (h.S + h.CAP) / h.S)), Image.LANCZOS) for f in frames]
-    h.FPS = 30
+    h.FPS = 30 // step
     h.save_gif(frames, Path(out))
     print(f"{out}: {len(frames)} frames, {Path(out).stat().st_size // 1024} KiB")
 

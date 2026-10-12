@@ -3,14 +3,15 @@
 Embassy firmware for the Hacker Hotel 2027 starfish badge. It compiles, but it
 has never run on a board.
 
-| | | | |
-|---|---|---|---|
-| ![hotel](docs/fw/hotel.gif) | ![startris](docs/fw/startris.gif) | ![breakout](docs/fw/breakout.gif) | ![star chase](docs/fw/chase.gif) |
-| ![ripple](docs/anim/ripple.gif) | ![galaxy](docs/anim/galaxy.gif) | ![fire](docs/anim/fire.gif) | ![heartbeat](docs/anim/heartbeat.gif) |
+| | | | | |
+|---|---|---|---|---|
+| ![hotel](docs/fw/hotel.gif) | ![startris](docs/fw/startris.gif) | ![breakout](docs/fw/breakout.gif) | ![star chase](docs/fw/chase.gif) | ![name swap](docs/fw/swap.gif) |
+| ![ripple](docs/anim/ripple.gif) | ![galaxy](docs/anim/galaxy.gif) | ![fire](docs/anim/fire.gif) | ![heartbeat](docs/anim/heartbeat.gif) | |
 
 Top row: recorded from the firmware itself, running on the PC
-(`tools/fwsim`), drawn on a KiCad render of the board with the real LED
-positions. Bottom row: the Python animation sketches the firmware ports.
+(`tools/fwsim`; the name swap from two C emulators), drawn on a KiCad
+render of the board with the real LED positions. Bottom row: the Python
+animation sketches the firmware ports.
 
 ## Using the badge
 
@@ -24,6 +25,7 @@ every game, the name tag and the emulator. The short version:
 | Name, hotel, animations | ◀ / ▶ previous / next screen, A brightness |
 | Games | play themselves until you press ◀, ▶ or B |
 | **Hold ◀ + ▶, 3 s** | reboot into the USB boot ROM for flashing |
+| **B** on the name tag | send your name over infrared; a badge that gets it says HI with your name and sends its own back (C firmware) |
 
 ◀ and ▶ are the two buttons on the front of the lower legs (thumbs), A and
 B the two on the back of the side arms (A right, B left).
@@ -52,6 +54,28 @@ data. The CH643's USB block has the same address and registers, but the
 port is **not tested on a CH643 yet**. The protocol is in `c/src/proto.h`.
 It uses the pid.codes test ID 1209:D035 for now; a real badge needs its own.
 
+## Infrared and the UART console (C firmware)
+
+**Name swap.** B on the name tag sends your name over infrared. A badge
+that receives it shows "HI" and your name, and answers with its own name,
+which yours then shows: one press, and both know who they met. The format
+is NEC-style pulse-distance coding on 38 kHz, with a type, a length and a
+CRC (`c/src/irproto.h`); the carrier is switched in software from the
+SysTick compare interrupt, and the receiver's edges come in on an EXTI
+interrupt (`c/src/ir.c`). The driver is tested on the PC against a fake
+SysTick and GPIO (waveform out decodes, distorted edges in decode, own
+echo ignored), not on a badge. Note the hardware issue below: the IR
+receiver has no supply on the current board.
+
+**UART console.** The UART header J3 (115200 8N1) prints a log (boot,
+names saved, IR packets) and takes commands: `help`, `info`,
+`name TEXT`, `show N`, `level N`, `hello`. GUESS: USART3 remap 3 for
+PB16 / PB17 (see `c/src/uart.c`).
+
+Both work in the emulator: every C emulator on a PC shares one infrared
+"room" (UDP broadcast on 127.255.255.255:8028), so start two and press B
+on one; stdin is the console and the log goes to stderr.
+
 ## Emulator
 
 Either firmware can be built as a shared library and played on the PC:
@@ -75,8 +99,8 @@ board where they are; see
 | Buttons | ◀ SW3 PC5, B SW1 PB20, A SW2 PC4, ▶ SW4 PB18; active low, 10k pull-ups on the board |
 | Power | LiPo (JST J2) with XT4054 charger and power path; CHRG on PB22; VBUS sense on PC3 |
 | Debug | SWD header J4: 1 SWIO (PC18), 2 SWCK (PC19), 3 VCC, 4 GND |
-| UART | header J3: 1 RX (PB17), 2 TX (PB16), 3 VCC, 4 GND; USART3. Not used yet |
-| IR | receiver CGQ1 (38 kHz) on PB19; IR LED D316, anode PB23 (TIM1 CH4) through 47 Ω, cathode PB21. Not used yet |
+| UART | header J3: 1 RX (PB17), 2 TX (PB16), 3 VCC, 4 GND; USART3. Log and console in C |
+| IR | receiver CGQ1 (38 kHz) on PB19; IR LED D316, anode PB23 through 47 Ω, cathode PB21. Name swap in C |
 
 ## Build
 
@@ -162,9 +186,9 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 
 | | |
 |---|---|
-| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it |
+| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it; C emulators share infrared, stdin is the UART console |
 | `tools/fwsim` | `cargo test` checks the name editor. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random presses in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
-| `tools/sim/fwgif.py` | Turns a `fwsim record` into a GIF on the board render |
+| `tools/sim/fwgif.py` | Turns a `fwsim record` (or frames from the C emulator library) into a GIF on the board render |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
 | `tools/sim/games.py` | The first game mock-ups, played by a scripted AI |
 | `tools/gen_layout.py` | LED map from the KiCad board, for Rust and C |
@@ -174,24 +198,28 @@ The Python tools need numpy, scipy, Pillow and ffmpeg.
 ## Size
 
 Everything above (name tag and name entry, hotel screen, menu, 6
-animations, 6 games, the USB boot gesture; in C also the USB device),
-measured. The last 256 bytes of
+animations, 6 games, the USB boot gesture; in C also the USB device, the
+infrared name swap and the UART console), measured. The last 256 bytes of
 flash are kept for the saved name.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os`, with USB | **24.2 KB** (39%) | 5.0 KB + 2 KB stack |
+| C, GCC 15 `-Os`, with USB, IR and UART | **28.3 KB** (46%) | 5.8 KB + 2 KB stack |
 | Rust + Embassy, `opt-level = "z"` | 31.6 KB (51%) | 2.5 KB + stack |
 | Rust + Embassy, `opt-level = "s"` (default) | **35.0 KB** (57%) | 2.5 KB + stack |
 
-Roughly where the C flash goes: animations 4.0 KB, Startris 2.5 KB, LED
-tables 2.2 KB, Snake 1.8 KB (its demo path search included), menu 1.5 KB,
+Roughly where the C flash goes: animations 4.0 KB, the app (menu, USB
+settings, infrared greeting) 3.4 KB, Startris 2.5 KB, LED tables 2.2 KB,
+Snake 1.8 KB (its demo path search included),
 Pong / Star Chase / game shell / name tag / Breakout about 1.1 to 1.3 KB
 each, Flappy 0.7 KB. The 5x7 font is 295 bytes.
 
 USB in C is 2.3 KB: the driver about 1.25 KB, descriptors 0.3 KB (the
-Windows part 195 bytes), the protocol 0.4 KB, and 326 bytes of RAM. Without
-it, C is 21.9 KB, and Rust is about 1.6 times that: about 3 KB of Embassy executor, timer
+Windows part 195 bytes), the protocol 0.4 KB, and 326 bytes of RAM.
+Infrared and the UART console add 4.2 KB (IR driver 1.1 KB, pulse codec
+0.7 KB, UART 0.5 KB, console 1.0 KB, the greeting in the app about 1 KB)
+and 0.85 KB of RAM, mostly the UART's 512-byte send buffer. Without
+USB, IR and UART, C is 21.8 KB, and Rust is about 1.6 times that: about 3 KB of Embassy executor, timer
 and HAL interrupt code, the rest is code generation. There is room left for
 more games either way.
 
@@ -215,10 +243,19 @@ more games either way.
   - the frame-done flag
   - the clock enable
 
-  Ask WCH for the reference manual or the MounRiver LEDPWM library.
+  openwch/ch643's `Datasheet/README.md` now links a reference manual,
+  CH643RM.PDF, on wch.cn (behind a JavaScript download page, so not
+  fetched here); it may settle this and the remaps below. Otherwise ask
+  WCH for it or for the MounRiver LEDPWM library.
   If the hardware block cannot be made to work, write a software scanner
   (GPIO + timer). Only `ledpwm.rs` would change, but check the GPIO
   sink-current limits first: one COM pin can sink up to 24 LEDs at once.
+- **USART3 on PB16 / PB17** (C, `uart.c`): remap value 3. The KiCad
+  symbol lists TX3 / RX3 there; ch32-data only knows remaps 0 to 2.
+- **SysTick compare interrupt** (C, `ir.c`): fires when the free-running
+  counter reaches CMP without auto-reload, as on the QingKe V2 core.
+- **Timer remaps** are avoided: the IR carrier is made in software,
+  because the KiCad symbol and ch32-data disagree about TIM1 CH4 on PB23.
 
 ## Hardware notes found along the way
 

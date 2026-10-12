@@ -3,11 +3,17 @@
  * from the hardware-independent sources only. */
 #include <setjmp.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 #include "../../tools/emu/badge_emu.h"
 #include "anim.h"
 #include "app.h"
 #include "bootloader.h"
+#include "console.h"
 #include "frame.h"
+#include "ir.h"
+#include "irproto.h"
+#include "log.h"
 #include "proto.h"
 
 #define EXPORT __attribute__((visibility("default")))
@@ -64,13 +70,72 @@ EXPORT uint32_t emu_render(uint8_t held, uint8_t *out)
     return 0;
 }
 
-EXPORT int emu_usb(const uint8_t *in, int len, uint8_t *out)
+static void keep_saved_name(void)
 {
-    int n = proto_handle(in, len, out);
     name_t name;
     if (app_saved_name(&name)) { /* SET NAME: "flash" it, like main.c */
         flash_name = name;
         has_flash_name = true;
     }
+}
+
+EXPORT int emu_usb(const uint8_t *in, int len, uint8_t *out)
+{
+    int n = proto_handle(in, len, out);
+    keep_saved_name();
     return n;
+}
+
+/* the debug log goes to stderr */
+void log_str(const char *s) { fputs(s, stderr); }
+void log_u32(uint32_t n) { fprintf(stderr, "%u", n); }
+void log_line(const char *s) { fprintf(stderr, "%s\n", s); }
+
+EXPORT void emu_console(const char *line)
+{
+    console_line(line);
+    keep_saved_name();
+}
+
+/* infrared: a packet waits here until the emulator takes it */
+static uint8_t ir_out[IR_PACKET_MAX];
+static int ir_out_len;
+
+bool ir_send(uint8_t type, const uint8_t *data, int len)
+{
+    if (ir_out_len)
+        return false;
+    ir_out_len = ir_pack(type, data, len, ir_out);
+    return ir_out_len > 0;
+}
+
+bool ir_busy(void) { return ir_out_len > 0; }
+
+EXPORT int emu_ir_tx(uint8_t *out)
+{
+    int n = ir_out_len;
+    memcpy(out, ir_out, (size_t)n);
+    ir_out_len = 0;
+    return n;
+}
+
+/* a packet from another emulator: turned into marks and spaces as the
+ * receiver would see them (marks a little long, spaces a little short),
+ * so it goes through the badge's decoder */
+EXPORT void emu_ir_rx(const uint8_t *in, int len)
+{
+    static ir_dec_t dec;
+    int got = 0;
+    ir_dec_reset(&dec);
+#define FEED(mark, us) if (!got) got = ir_dec_feed(&dec, mark, us)
+    FEED(true, IR_HDR_MARK_US + 100);
+    FEED(false, IR_HDR_SPACE_US - 100);
+    for (int k = 0; k < len * 8; k++) {
+        FEED(true, IR_BIT_MARK_US + 100);
+        FEED(false, (in[k / 8] >> (k % 8) & 1 ? IR_ONE_SPACE_US : IR_ZERO_SPACE_US) - 100);
+    }
+    FEED(true, IR_BIT_MARK_US + 100);
+#undef FEED
+    if (got)
+        app_ir_received(dec.buf[0], dec.buf + 2, dec.buf[1]);
 }

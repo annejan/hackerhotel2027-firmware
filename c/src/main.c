@@ -1,17 +1,21 @@
 /* Hacker Hotel 2027 starfish badge: C port of the theoretical Rust/Embassy
  * firmware, for comparison. Same hardware notes as ../../src/main.rs.
  *
- * One super-loop, no interrupts: SysTick runs free on HCLK/8 and the loop
- * polls it to schedule button scans (100 Hz), the CHRG pin (2 Hz) and
- * frames (FPS). */
+ * One super-loop: SysTick runs free on HCLK/8 and the loop polls it to
+ * schedule button scans (100 Hz), the CHRG pin (2 Hz) and frames (FPS).
+ * USB and the UART are polled too. The only interrupts are infrared
+ * (ir.c): the SysTick compare while sending, and the receiver's edges. */
 #include <stdbool.h>
 #include "ch643.h"
 #include "anim.h"
 #include "app.h"
 #include "buttons.h"
 #include "events.h"
+#include "ir.h"
+#include "log.h"
 #include "ledpwm.h"
 #include "store.h"
+#include "uart.h"
 #include "usb.h"
 
 #define CHRG_PIN 22 /* PB22, XT4054 CHRG: open-drain, low while charging */
@@ -47,11 +51,18 @@ int main(void)
         name_default(&name);
     app_init(&name);
     usb_init();
+    uart_init();
+    ir_init();
+    log_str("\r\nhh27 starfish badge, c firmware. Name: ");
+    log_line(name.s);
+    log_line("Type help.");
 
     uint32_t next_buttons = ticks(), next_chrg = ticks(), next_frame = ticks();
     int charging = -1;
     for (;;) {
         usb_poll();
+        uart_poll();
+        ir_poll();
         if (due(&next_buttons, BUTTONS_POLL_MS * tick_ms))
             buttons_poll();
         if (due(&next_chrg, 500 * tick_ms)) {
@@ -63,7 +74,10 @@ int main(void)
             app_render(buttons_held);
             ledpwm_show(app_brightness());
         }
-        if (app_saved_name(&name))
+        if (app_saved_name(&name)) {
             store_save(&name); /* a page erase and program: a few ms */
+            log_str("name saved: ");
+            log_line(name.s);
+        }
     }
 }

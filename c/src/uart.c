@@ -1,0 +1,91 @@
+/* USART3 on the UART header J3: pin 1 RX (PB17), pin 2 TX (PB16), pin 3
+ * VCC, pin 4 GND. Output goes through a ring buffer that uart_poll()
+ * drains, so logging never waits for the line.
+ *
+ * GUESS: USART3_RM = 3 puts TX3 / RX3 on PB16 / PB17. The KiCad symbol
+ * (from the datasheet) lists TX3_ / RX3_ on those pins; ch32-data only
+ * knows remaps 0..2 (PB3/PB4, PC18/PC19, PA18/PB14), so 3 is the one
+ * left. Not checked on a CH643. */
+#include "ch643.h"
+#include "console.h"
+#include "log.h"
+#include "uart.h"
+
+#define BAUD 115200
+#define TXQ 512 /* power of two */
+
+static struct {
+    char q[TXQ];
+    uint16_t head, tail;
+    char line[CONSOLE_LINE];
+    uint8_t n;
+} u;
+
+void uart_init(void)
+{
+    RCC->APB2PCENR |= RCC_IOPBEN | RCC_AFIOEN;
+    RCC->APB1PCENR |= RCC_USART3EN;
+    AFIO->PCFR1 = (AFIO->PCFR1 & ~AFIO_PCFR1_USART3_REMAP) | AFIO_PCFR1_USART3_REMAP; /* = 3 */
+    /* PB16 alternate push-pull 50 MHz (0b1011), PB17 floating input (R34
+     * pulls it up) */
+    GPIOB->CFGXR = (GPIOB->CFGXR & ~0xFFu) | 0x4Bu;
+    USART3->BRR = (uint16_t)((SystemCoreClock + BAUD / 2) / BAUD); /* USART3 runs on HCLK */
+    USART3->CTLR1 = USART_CTLR1_UE | USART_CTLR1_TE | USART_CTLR1_RE;
+}
+
+void uart_poll(void)
+{
+    while (u.tail != u.head && (USART3->STATR & USART_STATR_TXE)) {
+        USART3->DATAR = (uint8_t)u.q[u.tail];
+        u.tail = (u.tail + 1) & (TXQ - 1);
+    }
+    while (USART3->STATR & (USART_STATR_RXNE | USART_STATR_ORE)) {
+        char c = (char)USART3->DATAR; /* reading DATAR also clears an overrun */
+        if (c == '\r' || c == '\n') {
+            if (u.n) {
+                u.line[u.n] = 0;
+                log_str("\r\n");
+                console_line(u.line);
+                u.n = 0;
+            }
+        } else if (c == '\b' || c == 0x7F) {
+            if (u.n) {
+                u.n--;
+                log_str("\b \b");
+            }
+        } else if (c >= ' ' && u.n < CONSOLE_LINE - 1) {
+            u.line[u.n++] = c;
+            char echo[2] = {c, 0};
+            log_str(echo);
+        }
+    }
+}
+
+void log_str(const char *s)
+{
+    while (*s) {
+        uint16_t next = (u.head + 1) & (TXQ - 1);
+        if (next == u.tail)
+            return; /* full: drop the rest */
+        u.q[u.head] = *s++;
+        u.head = next;
+    }
+}
+
+void log_u32(uint32_t n)
+{
+    char b[11];
+    int i = 10;
+    b[i] = 0;
+    do {
+        b[--i] = (char)('0' + n % 10);
+        n /= 10;
+    } while (n);
+    log_str(b + i);
+}
+
+void log_line(const char *s)
+{
+    log_str(s);
+    log_str("\r\n");
+}

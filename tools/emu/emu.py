@@ -9,6 +9,11 @@
 http://localhost:8027/ and passes its packets to the firmware, as WebUSB
 would on a real badge (C firmware only for now).
 
+Infrared (C firmware): every emulator on this PC shares one "room" (UDP
+broadcast on 127.255.255.255:8028), so start two and press B on one's
+name tag: they swap names. Lines typed on stdin go to the badge's UART
+console (try `help`); its log appears on stderr. --no-ir leaves the room.
+
 The library holds the hardware-independent firmware (app, menu, games,
 animations; interface in badge_emu.h). This program stands in for the rest:
 the buttons (with the same press / tap / hold / chord rules as buttons.rs),
@@ -20,6 +25,8 @@ C = USB power on/off, R = reset, Esc = quit.
 """
 import ctypes
 import json
+import os
+import socket
 import queue
 import sys
 import threading
@@ -83,6 +90,14 @@ class Firmware:
         if self.has_usb:
             lib.emu_usb.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.POINTER(ctypes.c_uint8)]
             lib.emu_usb.restype = ctypes.c_int
+        self.has_ir = hasattr(lib, "emu_ir_tx") and hasattr(lib, "emu_ir_rx")
+        if self.has_ir:
+            lib.emu_ir_tx.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
+            lib.emu_ir_tx.restype = ctypes.c_int
+            lib.emu_ir_rx.argtypes = [ctypes.c_char_p, ctypes.c_int]
+        self.has_console = hasattr(lib, "emu_console")
+        if self.has_console:
+            lib.emu_console.argtypes = [ctypes.c_char_p]
         lib.emu_init()
 
     def usb(self, packet):
@@ -91,6 +106,17 @@ class Firmware:
         out = (ctypes.c_uint8 * 64)()
         n = self.lib.emu_usb(data, min(len(packet), 64), out)
         return bytes(out[:n])
+
+    def ir_tx(self):
+        """The packet the firmware wants to send over IR, or b""."""
+        out = (ctypes.c_uint8 * 64)()
+        return bytes(out[:self.lib.emu_ir_tx(out)])
+
+    def ir_rx(self, packet):
+        self.lib.emu_ir_rx(packet, len(packet))
+
+    def console(self, line):
+        self.lib.emu_console(line.encode(errors="replace"))
 
     def event(self, kind, arg=0):
         self.lib.emu_event(kind, arg)
@@ -145,6 +171,48 @@ class WebBridge:
                 return
             box["reply"] = fw.usb(packet)
             box["done"].set()
+
+
+IR_ADDR = ("127.255.255.255", 8028)
+
+
+class IrRoom:
+    """The emulators' shared infrared: a UDP broadcast that only this PC
+    sees. Each packet carries a random sender id, so an emulator skips
+    its own."""
+
+    def __init__(self):
+        self.me = os.urandom(4)
+        self.sock = s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.bind(IR_ADDR)
+        s.setblocking(False)
+
+    def send(self, packet):
+        self.sock.sendto(self.me + packet, IR_ADDR)
+
+    def received(self):
+        while True:
+            try:
+                data = self.sock.recv(256)
+            except BlockingIOError:
+                return
+            if data[:4] != self.me:
+                yield data[4:]
+
+
+class StdinConsole:
+    """Lines from stdin, for the badge's UART console, read on a thread
+    and handed to the Tk thread."""
+
+    def __init__(self):
+        self.lines = queue.Queue()
+        threading.Thread(target=self.read, daemon=True).start()
+
+    def read(self):
+        for line in sys.stdin:
+            self.lines.put(line.rstrip("\r\n"))
 
 
 class Buttons:
@@ -246,9 +314,11 @@ class FastRenderer:
 
 
 class App:
-    def __init__(self, fw, web=None):
+    def __init__(self, fw, web=None, ir=None, console=None):
         self.fw = fw
         self.web = web
+        self.ir = ir
+        self.console = console
         self.buttons = Buttons(fw.event)
         self.renderer = FastRenderer()
         self.charging = False
@@ -328,6 +398,17 @@ class App:
     def tick(self):
         if self.web:
             self.web.serve(self.fw)
+        if self.console:
+            while not self.console.lines.empty():
+                self.fw.console(self.console.lines.get())
+        if self.ir:
+            for packet in self.ir.received():
+                self.fw.ir_rx(packet)
+                self.say("IR: received")
+            packet = self.fw.ir_tx()
+            if packet:
+                self.ir.send(packet)
+                self.say("IR: sent")
         self.buttons.poll()
         held = self.buttons.held()
         rebooted, frame = self.fw.render(held)
@@ -377,7 +458,15 @@ def main(args):
         print(f"setup page: {url}", flush=True)
         if "--no-browser" not in args:
             webbrowser.open(url)
-    App(fw, web).root.mainloop()
+    ir = None
+    if fw.has_ir and "--no-ir" not in args:
+        try:
+            ir = IrRoom()
+            print(f"infrared: sharing {IR_ADDR[0]}:{IR_ADDR[1]} with the other emulators", flush=True)
+        except OSError as e:
+            print(f"infrared: off ({e})", flush=True)
+    console = StdinConsole() if fw.has_console else None
+    App(fw, web, ir, console).root.mainloop()
 
 
 if __name__ == "__main__":

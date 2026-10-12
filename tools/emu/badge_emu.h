@@ -39,3 +39,15 @@ uint8_t emu_brightness(void);      /* 0..255, before gamma */
  * with the reply and returns its length. emu.py --web uses it to let the
  * browser page talk to the emulator. */
 int emu_usb(const uint8_t *in, int len, uint8_t *out);
+
+/* Optional (C firmware only for now): infrared. emu_ir_tx fills out[64]
+ * with a packet the firmware wants to send (irproto.h format) and returns
+ * its length, or 0. emu_ir_rx hands it a packet from another badge; it
+ * goes through the badge's pulse decoder. emu.py passes them between the
+ * emulators on one PC. */
+int emu_ir_tx(uint8_t *out);
+void emu_ir_rx(const uint8_t *in, int len);
+
+/* Optional (C firmware only): one line for the UART console (console.h).
+ * The firmware's log goes to stderr. */
+void emu_console(const char *line);

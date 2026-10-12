@@ -3,8 +3,9 @@
  *
  * One super-loop: SysTick runs free on HCLK/8 and the loop polls it to
  * schedule button scans (100 Hz), the CHRG pin (2 Hz) and frames (FPS).
- * USB and the UART are polled too. The only interrupts are infrared
- * (ir.c): the SysTick compare while sending, and the receiver's edges. */
+ * USB and the UART are polled too. Interrupts: the LED scanner at the end
+ * of each row (ledpwm.c), and infrared (ir.c): the SysTick compare while
+ * sending, and the receiver's edges. */
 #include <stdbool.h>
 #include "ch643.h"
 #include "anim.h"

@@ -1,27 +1,26 @@
-/* IR send and receive, with two small interrupts and no timer peripheral.
+/* IR send and receive.
  *
- * Send: the SysTick compare interrupt (the counter keeps running free for
- * the main loop) switches the LED for each half of the 38 kHz carrier
- * during a mark (1/3 on, 2/3 off), and fires once at the end of a space.
- * That is about 76 000 interrupts a second while a mark goes out, and
- * none otherwise. Doing it in software avoids the timer pin remaps, which
- * WCH has not documented for the CH643 (the KiCad symbol and ch32-data
- * disagree about TIM1 CH4 on PB23).
+ * Send: TIM1 channel 4 makes the 38 kHz carrier (1/3 duty) on PB23, the
+ * LED's anode; TIM1_RM = 1xx puts CH4 there (CH643RM 8.3.2.1). The
+ * cathode PB21 stays low. The SysTick compare interrupt (the counter keeps
+ * running free for the main loop) fires at the end of each mark and space
+ * and switches the carrier on or off for the next one: about 450
+ * interrupts for a name. The compare value goes through the timer's
+ * preload, so every edge is late by the same part of a carrier period.
  *
  * Receive: an EXTI interrupt on both edges of PB19 stores how long each
  * mark and space lasted in a ring; ir_poll() decodes them in the main
  * loop. The receiver hears our own LED, so receiving pauses while we send.
  *
- * GUESS: SysTick compare without auto-reload. On QingKe V4 the CNTIF flag
- * should set when CNT reaches CMP with STRE = 0, as ch32fun relies on for
- * the V2 core; not checked on a CH643. */
+ * SysTick with STRE = 0 keeps counting past the compare value and sets
+ * CNTIF when it gets there (QingKe V4 manual, chapter 5). */
 #include "ch643.h"
 #include "app.h"
 #include "ir.h"
 #include "irproto.h"
 
-#define LED_ON_PIN 21  /* PB21, LED cathode: low = on (while the anode is high) */
-#define ANODE_PIN 23   /* PB23, LED anode */
+#define CATHODE_PIN 21 /* PB21, LED cathode: always low */
+#define ANODE_PIN 23   /* PB23, LED anode: TIM1 CH4 */
 #define RECV_PIN 19    /* PB19, receiver output */
 #define CARRIER_HZ 38000
 #define ECHO_US 3000   /* the receiver's output settles after our last mark */
@@ -34,14 +33,12 @@
 #define STK_STIE (1u << 1)
 
 static uint32_t ticks_per_us; /* SysTick runs on HCLK/8 */
-static uint32_t on_ticks, off_ticks;
+static uint16_t carrier_on;   /* TIM1 compare value for 1/3 duty */
 
 static struct {
     volatile bool busy;
     uint8_t buf[IR_PACKET_MAX];
     uint16_t seg, segs; /* segment being sent, and how many there are */
-    uint16_t cycles;    /* carrier cycles left in this mark */
-    bool lit;
     uint64_t cmp;
 } tx;
 
@@ -63,27 +60,27 @@ static void cmp_set(uint64_t v)
     c[0] = (uint32_t)v;
 }
 
-static inline void led(bool on)
-{
-    if (on)
-        GPIOB->BCR = 1u << LED_ON_PIN;
-    else
-        GPIOB->BSXR = 1u << (LED_ON_PIN - 16);
-    tx.lit = on;
-}
-
 void ir_init(void)
 {
     ticks_per_us = SystemCoreClock / 8000000;
-    uint32_t period = SystemCoreClock / 8 / CARRIER_HZ;
-    on_ticks = period / 3;
-    off_ticks = period - on_ticks;
+    uint16_t period = (uint16_t)(SystemCoreClock / CARRIER_HZ);
+    carrier_on = period / 3;
 
-    RCC->APB2PCENR |= RCC_IOPBEN | RCC_AFIOEN;
-    /* PB21, PB23 push-pull outputs (mode nibble 0b0011), both low: LED off
-     * and no current; PB19 floating input (R35 pulls it up) */
-    GPIOB->BCR = 1u << LED_ON_PIN | 1u << ANODE_PIN;
-    GPIOB->CFGXR = (GPIOB->CFGXR & ~0xF0F0F000u) | 0x30304000u;
+    RCC->APB2PCENR |= RCC_IOPBEN | RCC_AFIOEN | RCC_TIM1EN;
+    /* TIM1 CH4 on PB23 (TIM1_RM = 100), PWM mode 1 with preload, output
+     * low while the compare value is 0; the counter only runs while sending */
+    AFIO->PCFR1 = (AFIO->PCFR1 & ~AFIO_PCFR1_TIM1_REMAP) | AFIO_PCFR1_TIM1_REMAP_2;
+    TIM1->PSC = 0;
+    TIM1->ATRLR = period - 1;
+    TIM1->CHCTLR2 = (uint16_t)((TIM1->CHCTLR2 & 0x00FF) | 0x6000 | TIM_OC4PE);
+    TIM1->CH4CVR = 0;
+    TIM1->CCER |= TIM_CC4E;
+    TIM1->BDTR |= TIM_MOE;
+    TIM1->SWEVGR = TIM_UG;
+    /* PB21 push-pull output low, PB23 alternate push-pull (0b1011), PB19
+     * floating input (R35 pulls it up) */
+    GPIOB->BCR = 1u << CATHODE_PIN;
+    GPIOB->CFGXR = (GPIOB->CFGXR & ~0xF0F0F000u) | 0xB0304000u;
 
     /* EXTI line 19 from port B, both edges */
     AFIO->EXTICR[1] = (AFIO->EXTICR[1] & ~(3u << 6)) | 1u << 6;
@@ -117,40 +114,25 @@ static void next_segment(void)
         mark = (s & 1) == 0 || s == tx.segs - 1;
         us = mark ? IR_BIT_MARK_US : tx.buf[k / 8] >> (k % 8) & 1 ? IR_ONE_SPACE_US : IR_ZERO_SPACE_US;
     } else {
-        /* done */
+        /* done: carrier off, timer stopped */
         SysTick->CTLR = STK_STE;
-        GPIOB->BCR = 1u << ANODE_PIN;
+        TIM1->CH4CVR = 0;
+        TIM1->SWEVGR = TIM_UG;
+        TIM1->CTLR1 = 0;
         rx.mute_until = (uint32_t)SysTick->CNT + ECHO_US * ticks_per_us;
         rx.muted = true;
         tx.busy = false;
         return;
     }
-    if (mark) {
-        tx.cycles = (uint16_t)((us * CARRIER_HZ + 500000) / 1000000);
-        led(true);
-        tx.cmp += on_ticks;
-    } else {
-        tx.cycles = 0;
-        tx.cmp += us * ticks_per_us;
-    }
+    TIM1->CH4CVR = mark ? carrier_on : 0;
+    tx.cmp += us * ticks_per_us;
     cmp_set(tx.cmp);
 }
 
 IRQ void SysTick_Handler(void)
 {
     SysTick->SR = 0;
-    if (tx.lit) {
-        led(false);
-        tx.cmp += off_ticks;
-        cmp_set(tx.cmp);
-        --tx.cycles;
-    } else if (tx.cycles) {
-        led(true);
-        tx.cmp += on_ticks;
-        cmp_set(tx.cmp);
-    } else {
-        next_segment();
-    }
+    next_segment();
 }
 
 bool ir_send(uint8_t type, const uint8_t *data, int len)
@@ -163,7 +145,8 @@ bool ir_send(uint8_t type, const uint8_t *data, int len)
     tx.seg = 0;
     tx.segs = (uint16_t)(2 + n * 8 * 2 + 1);
     tx.busy = true;
-    GPIOB->BSXR = 1u << (LED_ON_PIN - 16) | 1u << (ANODE_PIN - 16); /* cathode high first: off */
+    TIM1->CNT = 0;
+    TIM1->CTLR1 = TIM_ARPE | TIM_CEN;
     tx.cmp = SysTick->CNT + 20 * ticks_per_us;
     cmp_set(tx.cmp);
     SysTick->SR = 0;

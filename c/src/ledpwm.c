@@ -1,62 +1,124 @@
-/* CH643 LEDPWM matrix driver. THEORETICAL, NOT TESTED ON HARDWARE.
+/* CH643 LEDPWM matrix driver, from the CH643 reference manual (CH643RM
+ * V1.9, chapter 24). Same as ../../src/ledpwm.rs. NOT TESTED ON HARDWARE.
  *
- * Same register sequence as the Rust firmware's ledpwm.rs; see there for
- * what is known. In short: register names come from WCH's ch643.h, but
- * there is no public reference manual, so every value marked GUESS is
- * inferred from a field name and must be checked on real hardware. */
+ * The board is the manual's "8 columns RGB, built-in drive" case (24.2.2;
+ * reference circuit 24.4.2 is 16 rows x 8 RGB columns, like this badge):
+ * PA0..PA23 are the PWM channels (the chip sources current, active high,
+ * through the series resistors to the anodes), PB0..PB15 the COM lines
+ * (built-in NMOS sinks the cathodes, active low). In MATRIX_MODE PA24 the
+ * PWM pins form 8 columns of three: column k is PA k ("red"), PA k+8
+ * ("green") and PA k+16 ("blue"). Here they are simply 24 channels.
+ *
+ * The scanner does not run by itself: it shows one COM line, stops and
+ * raises its interrupt. The handler points the DMA at the next row (8
+ * words; per column the intensity byte, then the PA k, PA k+8, PA k+16
+ * levels), writes DMA_CNT = 8, selects the next COM (which clears the
+ * flag) and sets PWM_OE again (PWM_OE_CLR switched it off for the change,
+ * so the rows do not ghost into each other).
+ *
+ * Timing: intensity PWM 6 bits (64 clocks), colour PWM 8 bits (256
+ * intensity periods): 16384 clocks a row, 341 us at 48 MHz, 5.5 ms for
+ * the 16 rows, 183 Hz. The brightness goes in the intensity byte, so the
+ * badge dims without losing any of the 256 colour steps.
+ *
+ * GUESS (the manual does not say): the LED reference clock is HCLK; with
+ * the 6-bit intensity PWM the intensity byte's low 6 bits count; DMA
+ * addresses are the low 16 bits of a RAM address. */
+#include <stdbool.h>
 #include "ch643.h"
 #include "frame.h"
 #include "ledpwm.h"
 
-/* GUESS: COM-major, PWM_CHANNELS grey bytes per COM, read by the LEDPWM DMA */
-static uint8_t dma_buf[SLOTS];
+#ifndef IRQ
+#define IRQ __attribute__((interrupt)) /* (empty for the host test) */
+#endif
+
+/* register bits, CH643RM 24.3 */
+#define COM_SEL_PB0 0x10       /* COM_SEL code of PB0; PBn is 0x10 + n */
+#define MATRIX_PA24 0x01       /* PWM_MOD: PA[7:0] / PA[15:8] / PA[23:16] */
+#define PWM_RGB_EN 0x70        /* PWM_MOD: red, green and blue groups on */
+#define INTEN_6BIT 0x20        /* CYCLE_CFG: 6-bit intensity, 8-bit colour, clock / 1 */
+#define INHIBIT(n) (((n) - 1) << 4) /* FRAME_CFG: blanking in intensity periods */
+#define IE_INHIBIT 0x80        /* FUNC_CTRL: interrupt at the end of each row */
+#define PWM_OE_CLR 0x04        /* FUNC_CTRL: clear PWM_OE on that interrupt */
+#define LED_ENABLE 0x01        /* FUNC_CTRL: the LED clock */
+#define ROW_WORDS 8            /* 8 columns, one 32-bit word each */
+
+/* two frames of row data; the scanner reads `front`, ledpwm_show() fills
+ * the other one and the handler swaps them at the start of a scan */
+static uint32_t rows[2][COMS][ROW_WORDS] __attribute__((aligned(4)));
+static volatile uint8_t front, com;
+static volatile bool pending;
+
+static void load_row(uint8_t c)
+{
+    LEDPWM->DMA = (uint16_t)(uintptr_t)rows[front][c];
+    LEDPWM->DMA_CNT = ROW_WORDS;
+    LEDPWM->COM_SEL = (uint8_t)(COM_SEL_PB0 + c); /* clears the interrupt flag */
+    LEDPWM->PWM_OE = 1;
+}
+
+IRQ void LEDPWM_IRQHandler(void)
+{
+    uint8_t c = (uint8_t)(com + 1);
+    if (c == COMS) {
+        c = 0;
+        if (pending) {
+            front ^= 1;
+            pending = false;
+        }
+    }
+    com = c;
+    load_row(c);
+}
 
 void ledpwm_init(void)
 {
-    /* GUESS: no LEDPWM clock-enable bit exists in ch643.h, assume always clocked */
+    RCC->APB2PCENR |= RCC_IOPAEN | RCC_IOPBEN;
+    /* PWM pins PA0..PA23: push-pull outputs, OUTDR 0 = active high.
+     * COM pins PB0..PB15: push-pull outputs, OUTDR 1 = active low.
+     * (RM 24.2.2 and table 8-10; with the LED block off this also keeps
+     * every LED dark.) */
+    GPIOA->BCR = 0x00FFFFFFu;
+    GPIOA->CFGLR = 0x33333333u;
+    GPIOA->CFGHR = 0x33333333u;
+    GPIOA->CFGXR = 0x33333333u;
+    GPIOB->BSHR = 0xFFFFu;
+    GPIOB->CFGLR = 0x33333333u;
+    GPIOB->CFGHR = 0x33333333u;
 
-    /* COM lines: PB0..PB15. No COMs on port A or C: COM_PA[23:16]_EN must
-     * stay 0, PA16..PA23 are PWM channels on this board. */
-    LEDPWM->COM_E_PB_L = 0xFF;
+    LEDPWM->COM_E_PB_L = 0xFF; /* PB0..PB15 are COM lines */
     LEDPWM->COM_E_PB_M = 0xFF;
     LEDPWM->COM_E_PB_H = 0x00;
     LEDPWM->COM_E_PAPC = 0x00;
-
-    /* GUESS: PWM_PIN has 16 bits; PA16..PA23 presumably via MATRIX_MODE */
-    LEDPWM->PWM_PIN_L = 0xFF;
-    LEDPWM->PWM_PIN_H = 0xFF;
-    LEDPWM->PWM_MOD = 0x01;
-
-    /* GUESS: COM count - 1, COM active low (built-in NMOS sinks cathodes) */
-    LEDPWM->COM_SEL = COMS - 1;
-    LEDPWM->KEY_CTRL = LED_KEY_CTRL_COM_LVE;
-
-    /* GUESS: fastest PWM clock, 8-bit grey, no repeat/inhibit */
-    LEDPWM->CYCLE_CFG = 0x00;
-    LEDPWM->FRAME_CFG = 0x00;
-    LEDPWM->ANA_CTRL = 0x00;
-    LEDPWM->INTEN_ADJ = 0xFF;
-
-    /* GUESS: bytes per COM - 1, low 16 bits of the RAM address */
-    LEDPWM->DMA_CNT = PWM_CHANNELS - 1;
-    LEDPWM->DMA = (uint16_t)(uintptr_t)dma_buf;
-
-    LEDPWM->PWM_OE = LED_PWM_OE_PWM_OE;
-    LEDPWM->FUNC_CTRL = LED_FUNC_CTRL_LED_ENABLE;
+    LEDPWM->PWM_PIN_L = 0xFF; /* columns 0..7 */
+    LEDPWM->PWM_PIN_H = 0x00;
+    LEDPWM->PWM_MOD = PWM_RGB_EN | MATRIX_PA24;
+    LEDPWM->ANA_CTRL = 0x00; /* no built-in constant current: the board has resistors */
+    LEDPWM->CYCLE_CFG = INTEN_6BIT;
+    LEDPWM->FRAME_CFG = INHIBIT(4); /* ~5 us between rows, no repeats */
+    LEDPWM->KEY_CTRL = 0x00;
+    LEDPWM->FUNC_CTRL = IE_INHIBIT | PWM_OE_CLR | LED_ENABLE;
+    NVIC_EnableIRQ(LEDPWM_IRQn);
+    com = 0;
+    load_row(0);
 }
 
 void ledpwm_show(uint8_t brightness)
 {
-    /* GUESS: LED_IF_SET marks the end of a scan frame (write 1 to clear);
-     * give up after a while instead of hanging if that is wrong */
-    for (int i = 0; i < 2000; i++) {
-        if (LEDPWM->DISP_STAT & LED_DISP_STAT_LED_IF_SET) {
-            LEDPWM->DISP_STAT = LED_DISP_STAT_LED_IF_SET;
-            break;
-        }
+    /* the last frame is still waiting for the start of a scan (5.5 ms at
+     * most); give up after a while instead of hanging if the scanner stopped */
+    for (uint32_t i = 0; pending && i < 200000; i++)
+        ;
+    uint8_t inten = brightness >> 2; /* 6-bit intensity */
+    if (brightness && !inten)
+        inten = 1;
+    uint32_t(*back)[ROW_WORDS] = rows[front ^ 1];
+    for (int c = 0; c < COMS; c++) {
+        const uint8_t *px = fb + c * PWM_CHANNELS;
+        for (int k = 0; k < ROW_WORDS; k++)
+            back[c][k] = inten | (uint32_t)GAMMA[px[k]] << 8 | (uint32_t)GAMMA[px[k + 8]] << 16 |
+                         (uint32_t)GAMMA[px[k + 16]] << 24;
     }
-    for (int i = 0; i < SLOTS; i++)
-        /* gamma first, then brightness scales the PWM duty: scaling before
-         * gamma would round night mode down to all-off */
-        dma_buf[i] = scale8(GAMMA[fb[i]], brightness);
+    pending = true;
 }

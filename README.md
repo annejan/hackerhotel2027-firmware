@@ -60,17 +60,16 @@ It uses the pid.codes test ID 1209:D035 for now; a real badge needs its own.
 that receives it shows "HI" and your name, and answers with its own name,
 which yours then shows: one press, and both know who they met. The format
 is NEC-style pulse-distance coding on 38 kHz, with a type, a length and a
-CRC (`c/src/irproto.h`); the carrier is switched in software from the
-SysTick compare interrupt, and the receiver's edges come in on an EXTI
-interrupt (`c/src/ir.c`). The driver is tested on the PC against a fake
+CRC (`c/src/irproto.h`). TIM1 CH4 makes the carrier on PB23 and the
+SysTick compare interrupt switches it at each mark and space; the
+receiver's edges come in on an EXTI interrupt (`c/src/ir.c`). The driver is tested on the PC against a fake
 SysTick and GPIO (waveform out decodes, distorted edges in decode, own
 echo ignored), not on a badge. Note the hardware issue below: the IR
 receiver has no supply on the current board.
 
 **UART console.** The UART header J3 (115200 8N1) prints a log (boot,
 names saved, IR packets) and takes commands: `help`, `info`,
-`name TEXT`, `show N`, `level N`, `hello`. GUESS: USART3 remap 3 for
-PB16 / PB17 (see `c/src/uart.c`).
+`name TEXT`, `show N`, `level N`, `hello`.
 
 Both work in the emulator: every C emulator on a PC shares one infrared
 "room" (UDP broadcast on 127.255.255.255:8028), so start two and press B
@@ -175,7 +174,7 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `games/` | Snake, Startris, Breakout, Pong, Flappy, Star Chase |
 | `frame.rs` | Frame buffer, text and digits, integer HSV, sine, RNG |
 | `font.rs` | 5x7 font (` `..`Z`), 3x5 digits |
-| `ledpwm.rs` | CH643 LEDPWM driver: **mostly guesswork, see below** |
+| `ledpwm.rs` | CH643 LEDPWM driver, from the reference manual: one interrupt per row, double-buffered frames |
 | `bootloader.rs` | Reboot into the USB boot ROM |
 | `generated.rs` | LED map, polar coordinates, gamma and sine tables (generated) |
 
@@ -204,9 +203,9 @@ flash are kept for the saved name.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os`, with USB, IR and UART | **28.3 KB** (46%) | 5.8 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` | 31.6 KB (51%) | 2.5 KB + stack |
-| Rust + Embassy, `opt-level = "s"` (default) | **35.0 KB** (57%) | 2.5 KB + stack |
+| C, GCC 15 `-Os`, with USB, IR and UART | **28.6 KB** (46%) | 6.4 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` | 31.9 KB (51%) | 3.1 KB + stack |
+| Rust + Embassy, `opt-level = "s"` (default) | **35.4 KB** (57%) | 3.1 KB + stack |
 
 Roughly where the C flash goes: animations 4.0 KB, the app (menu, USB
 settings, infrared greeting) 3.4 KB, Startris 2.5 KB, LED tables 2.2 KB,
@@ -219,7 +218,7 @@ Windows part 195 bytes), the protocol 0.4 KB, and 326 bytes of RAM.
 Infrared and the UART console add 4.2 KB (IR driver 1.1 KB, pulse codec
 0.7 KB, UART 0.5 KB, console 1.0 KB, the greeting in the app about 1 KB)
 and 0.85 KB of RAM, mostly the UART's 512-byte send buffer. Without
-USB, IR and UART, C is 21.8 KB, and Rust is about 1.6 times that: about 3 KB of Embassy executor, timer
+USB, IR and UART, C is about 22 KB, and Rust is about 1.6 times that: about 3 KB of Embassy executor, timer
 and HAL interrupt code, the rest is code generation. There is room left for
 more games either way.
 
@@ -232,30 +231,24 @@ more games either way.
   crates.io yet.
 - The LED map is traced from the PCB nets.
 
+- **LEDPWM**, from the CH643 reference manual (CH643RM V1.9, chapter 24).
+  The board is its "8 columns RGB, built-in drive" case; reference circuit
+  24.4.2 is 16 rows x 8 RGB columns, as here. MATRIX_MODE PA24, PA pins
+  active high, PB COM lines active low, one interrupt per row in which
+  the driver DMA-loads the next row (8 words: intensity, PA k, PA k+8,
+  PA k+16) and selects the next COM. The brightness is the intensity PWM.
+- **Remaps** (RM 8.3.2.1): USART3_RM = 11 puts TX/RX on PB16/PB17, and
+  TIM1_RM = 1xx puts CH4 on PB23, which now makes the IR carrier.
+  (ch32-data's CH643 tables stop at USART3 remap 2 and TIM1 remap 3.)
+- **SysTick** (QingKe V4 manual, chapter 5): with STRE = 0 the counter runs
+  on past the compare value and sets CNTIF there, as `ir.c` uses it.
+
 **Guessed** (each place is marked `GUESS` in the source)
 
-- **LEDPWM.** The register offsets and field names come from WCH's `ch643.h`.
-  WCH has published no reference manual and no LEDPWM example, so the bit
-  meanings are inferred from the field names. The unknowns are:
-  - the MATRIX_MODE value
-  - how 24 PWM channels map onto the 16-bit `PWM_PIN` register
-  - the DMA address and count format
-  - the frame-done flag
-  - the clock enable
-
-  openwch/ch643's `Datasheet/README.md` now links a reference manual,
-  CH643RM.PDF, on wch.cn (behind a JavaScript download page, so not
-  fetched here); it may settle this and the remaps below. Otherwise ask
-  WCH for it or for the MounRiver LEDPWM library.
-  If the hardware block cannot be made to work, write a software scanner
-  (GPIO + timer). Only `ledpwm.rs` would change, but check the GPIO
-  sink-current limits first: one COM pin can sink up to 24 LEDs at once.
-- **USART3 on PB16 / PB17** (C, `uart.c`): remap value 3. The KiCad
-  symbol lists TX3 / RX3 there; ch32-data only knows remaps 0 to 2.
-- **SysTick compare interrupt** (C, `ir.c`): fires when the free-running
-  counter reaches CMP without auto-reload, as on the QingKe V2 core.
-- **Timer remaps** are avoided: the IR carrier is made in software,
-  because the KiCad symbol and ch32-data disagree about TIM1 CH4 on PB23.
+- **LEDPWM details** the manual leaves open: that the LED reference clock is
+  HCLK (it sets the 183 Hz scan rate), that a 6-bit intensity uses the low
+  6 bits of the intensity byte, and that the DMA address is the low 16
+  bits of a RAM address. All in `ledpwm.rs` / `c/src/ledpwm.c`.
 
 ## Hardware notes found along the way
 
@@ -268,10 +261,13 @@ more games either way.
   R36) and the IR_RECV pull-up R35 are on a `+3.3V` net that nothing
   drives: there is no regulator. Probably meant to be VCC.
 - **VBUS straight into PC3.** VCC is VBUS minus a Schottky drop, so PC3
-  sits a little above VDD while USB is in. A divider would be safer.
-- **IR LED current.** Two GPIOs drive the IR LED through 47 Ω; at a full
-  battery that is roughly 40–60 mA, likely more than a GPIO should source
-  or sink. Check the datasheet limit.
+  sits a little above VDD while USB is in; the datasheet allows at most
+  VDD + 0.3 V on an I/O pin (CH643DS0 3.2). A divider would be safer.
+- **IR LED current.** The anode hangs off PB23 through 47 Ω. The datasheet
+  allows a PB pin to source at most 30 mA (absolute maximum), and only
+  12 mA at VDD − 0.4 V; PB pins are made to sink (100 mA). Better: anode
+  to VCC through the resistor, cathode on PB21, carrier from TIM2 CH1
+  (TIM2_RM = 001 puts CH1 on PB21).
 - **No battery gauge.** The board has no battery-voltage sense, so the
   firmware can show *that* the battery charges but not *how full* it is.
 - **USB in Rust.** ch32-hal has no USB driver for the CH643, so only the C

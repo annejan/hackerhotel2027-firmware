@@ -2,10 +2,9 @@
  * VCC, pin 4 GND. Output goes through a ring buffer that uart_poll()
  * drains, so logging never waits for the line.
  *
- * GUESS: USART3_RM = 3 puts TX3 / RX3 on PB16 / PB17. The KiCad symbol
- * (from the datasheet) lists TX3_ / RX3_ on those pins; ch32-data only
- * knows remaps 0..2 (PB3/PB4, PC18/PC19, PA18/PB14), so 3 is the one
- * left. Not checked on a CH643. */
+ * USART3_RM = 11 puts TX3 / RX3 on PB16 / PB17 (CH643RM 8.3.2.1; CTS, CK
+ * and RTS would land on PB18, PB22, PB19, but flow control and the clock
+ * output stay off). */
 #include "ch643.h"
 #include "console.h"
 #include "log.h"

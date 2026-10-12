@@ -1,8 +1,8 @@
 //! Animations, ported from tools/sim/hh2027.py to integer maths.
 //!
 //! Controls: T1 next, T2 previous, T3 brightness, T4 restart/reseed,
-//! hold any pad for night mode. While charging, the battery gauge shows
-//! until the next tap.
+//! hold any pad for night mode, hold T1 + T4 for 3 s to reboot into the USB
+//! boot ROM. While charging, the battery gauge shows until the next tap.
 
 use crate::font;
 use crate::frame::{hsv, mono_slots, polar, scale, sin8, Frame, Rgb, Rng};
@@ -81,6 +81,7 @@ impl Player {
                 self.charging = c;
                 self.show_charge = c;
             }
+            Event::Bootloader => {} // handled by the main loop
         }
     }
 
@@ -249,6 +250,30 @@ fn charging(f: &mut Frame, t: u32) {
     for (i, l) in RGB.iter().enumerate() {
         if (l.rank as usize) < cells * 7 / 10 {
             f.rgb(i, hsv((cells * 85 / 10) as u8, 255, 200));
+        }
+    }
+}
+
+/// Shown for a second before rebooting into the USB boot ROM: an arrow
+/// moving down the grid (towards the USB port) and the arms filling blue.
+pub fn usb_boot(f: &mut Frame, t: u32) {
+    let shift = (t * 4 / FPS) as usize; // 4 rows per second
+    for r in 0..9 {
+        for c in 7..=9 {
+            f.grid(r + shift, c, 220);
+        }
+    }
+    for (i, w) in (0..5usize).zip([7, 5, 3, 1, 0]) {
+        if w > 0 {
+            for c in 8 - w / 2..=8 + w / 2 {
+                f.grid(9 + i + shift, c, 255);
+            }
+        }
+    }
+    let fill = (t * 7 / FPS) as u8;
+    for (i, l) in RGB.iter().enumerate() {
+        if l.rank <= fill {
+            f.rgb(i, Rgb(20, 60, 255));
         }
     }
 }

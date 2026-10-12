@@ -22,6 +22,11 @@ const PADS: usize = 4;
 const POLL_MS: u64 = 10;
 pub const HOLD_MS: u64 = 600;
 const HOLD_TICKS: u16 = (HOLD_MS / POLL_MS) as u16;
+/// Hold these two pads (T1 + T4) together this long to reboot into the
+/// USB boot ROM. Neither is on ADC channel 11, so it works on every lot.
+pub const BOOT_CHORD: (usize, usize) = (0, 3);
+pub const BOOT_MS: u64 = 3000;
+const BOOT_TICKS: u16 = (BOOT_MS / POLL_MS) as u16;
 
 // From the WCH example.
 const CHARGE_TIME: u32 = 0x80;
@@ -41,6 +46,11 @@ struct Pad {
     /// Untouched level, 4 fractional bits.
     baseline: u32,
     down: bool,
+    /// Released during the last poll.
+    released: bool,
+    /// Was down together with another pad: part of a chord, so it sends no
+    /// Tap or Hold of its own.
+    chord: bool,
     ticks: u16,
 }
 
@@ -67,20 +77,27 @@ pub async fn scan(
     hal::pac::ADC1.ctlr1().modify(|w| w.set_tkenable(true));
 
     let mut chans = [t1.degrade_adc(), t2.degrade_adc(), t3.degrade_adc(), t4.degrade_adc()];
-    let mut pads: [Pad; PADS] = core::array::from_fn(|_| Pad { baseline: 0, down: false, ticks: 0 });
+    let mut pads: [Pad; PADS] = core::array::from_fn(|_| Pad {
+        baseline: 0,
+        down: false,
+        released: false,
+        chord: false,
+        ticks: 0,
+    });
     for (pad, ch) in pads.iter_mut().zip(chans.iter_mut()) {
         pad.baseline = measure(&mut adc, ch) << 4;
     }
 
     let mut ticker = Ticker::every(Duration::from_millis(POLL_MS));
     loop {
-        for (i, (pad, ch)) in pads.iter_mut().zip(chans.iter_mut()).enumerate() {
+        for (pad, ch) in pads.iter_mut().zip(chans.iter_mut()) {
             let raw = measure(&mut adc, ch);
             let base = pad.baseline >> 4;
             // A finger adds capacitance; which way the count moves is not
             // documented, so react to either direction.
             let delta = raw.abs_diff(base);
 
+            pad.released = false;
             if !pad.down {
                 if delta > PRESS_DELTA {
                     pad.down = true;
@@ -91,16 +108,31 @@ pub async fn scan(
                 }
             } else if delta < RELEASE_DELTA {
                 pad.down = false;
-                if pad.ticks < HOLD_TICKS {
-                    let _ = EVENTS.try_send(Event::Tap(i as u8));
-                }
+                pad.released = true;
             } else {
                 pad.ticks = pad.ticks.saturating_add(1);
-                if pad.ticks == HOLD_TICKS {
-                    let _ = EVENTS.try_send(Event::Hold(i as u8));
-                }
             }
         }
+
+        if pads.iter().filter(|p| p.down).count() > 1 {
+            pads.iter_mut().filter(|p| p.down).for_each(|p| p.chord = true);
+        }
+        for (i, pad) in pads.iter_mut().enumerate() {
+            if pad.released {
+                if !pad.chord && pad.ticks < HOLD_TICKS {
+                    let _ = EVENTS.try_send(Event::Tap(i as u8));
+                }
+                pad.chord = false;
+            } else if pad.down && !pad.chord && pad.ticks == HOLD_TICKS {
+                let _ = EVENTS.try_send(Event::Hold(i as u8));
+            }
+        }
+
+        let (a, b) = (&pads[BOOT_CHORD.0], &pads[BOOT_CHORD.1]);
+        if a.down && b.down && a.ticks.min(b.ticks) == BOOT_TICKS {
+            let _ = EVENTS.try_send(Event::Bootloader);
+        }
+
         ticker.next().await;
     }
 }

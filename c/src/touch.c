@@ -15,6 +15,7 @@
 #define PADS 4
 #define FIRST_CHANNEL 10
 #define HOLD_TICKS (TOUCH_HOLD_MS / TOUCH_POLL_MS)
+#define BOOT_TICKS (TOUCH_BOOT_MS / TOUCH_POLL_MS)
 #define CHARGE_TIME 0x80
 #define DISCHARGE_TIME 0x08
 #define SAMPLE_11_CYCLES 7
@@ -24,6 +25,8 @@
 static struct {
     uint32_t baseline; /* untouched level, 4 fractional bits */
     bool down;
+    bool released; /* released during the last poll */
+    bool chord;    /* was down together with another pad: no Tap/Hold of its own */
     uint16_t ticks;
 } pads[PADS];
 
@@ -62,11 +65,13 @@ void touch_init(void)
 
 void touch_poll(void)
 {
+    int down = 0;
     for (int i = 0; i < PADS; i++) {
         uint32_t raw = measure(FIRST_CHANNEL + i);
         /* direction of change with a finger is undocumented: react to both */
         uint32_t delta = absdiff(raw, pads[i].baseline >> 4);
 
+        pads[i].released = false;
         if (!pads[i].down) {
             if (delta > PRESS_DELTA) {
                 pads[i].down = true;
@@ -77,10 +82,26 @@ void touch_poll(void)
             }
         } else if (delta < RELEASE_DELTA) {
             pads[i].down = false;
-            if (pads[i].ticks < HOLD_TICKS)
+            pads[i].released = true;
+        } else if (pads[i].ticks < UINT16_MAX) {
+            pads[i].ticks++;
+        }
+        down += pads[i].down;
+    }
+
+    for (int i = 0; i < PADS; i++) {
+        if (down > 1 && pads[i].down)
+            pads[i].chord = true;
+        if (pads[i].released) {
+            if (!pads[i].chord && pads[i].ticks < HOLD_TICKS)
                 anim_event(EV_TAP, (uint8_t)i);
-        } else if (pads[i].ticks < UINT16_MAX && ++pads[i].ticks == HOLD_TICKS) {
+            pads[i].chord = false;
+        } else if (pads[i].down && !pads[i].chord && pads[i].ticks == HOLD_TICKS) {
             anim_event(EV_HOLD, (uint8_t)i);
         }
     }
+
+    const uint16_t a = pads[TOUCH_BOOT_A].ticks, b = pads[TOUCH_BOOT_B].ticks;
+    if (pads[TOUCH_BOOT_A].down && pads[TOUCH_BOOT_B].down && (a < b ? a : b) == BOOT_TICKS)
+        anim_event(EV_BOOTLOADER, 0);
 }

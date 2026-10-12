@@ -12,12 +12,13 @@
 //!
 //! Tasks:
 //!   main loop      renders the current animation at FPS and hands frames to the display
-//!   touch::scan    polls the touch pads, sends Tap/Hold events
+//!   touch::scan    polls the touch pads, sends Tap/Hold/Bootloader events
 //!   charge_monitor watches CHRG, sends Charging events
 #![no_std]
 #![no_main]
 
 mod anim;
+mod bootloader;
 mod font;
 mod frame;
 mod generated;
@@ -43,6 +44,8 @@ pub enum Event {
     Hold(u8),
     /// USB power present and battery charging
     Charging(bool),
+    /// T1 + T4 held for `touch::BOOT_MS`: reboot into the USB boot ROM
+    Bootloader,
 }
 
 pub static EVENTS: Channel<CriticalSectionRawMutex, Event, 8> = Channel::new();
@@ -95,6 +98,16 @@ async fn main(spawner: Spawner) -> ! {
 
     loop {
         while let Ok(ev) = EVENTS.try_receive() {
+            if ev == Event::Bootloader {
+                // show it for a second, so a held chord is visibly accepted
+                for t in 0..anim::FPS {
+                    frame.clear();
+                    anim::usb_boot(&mut frame, t);
+                    display.show(&frame, player.brightness().max(64));
+                    ticker.next().await;
+                }
+                bootloader::reboot_to_boot_rom();
+            }
             player.handle(ev);
         }
         frame.clear();

@@ -1,11 +1,12 @@
 /* Animations, same as the Rust firmware's anim.rs.
  *
  * Controls: T1 next, T2 previous, T3 brightness, T4 restart/reseed,
- * hold any pad for night mode. While charging, the battery gauge shows
- * until the next tap. */
+ * hold any pad for night mode, hold T1 + T4 for 3 s to reboot into the USB
+ * boot ROM. While charging, the battery gauge shows until the next tap. */
 #include <stdbool.h>
 #include <string.h>
 #include "anim.h"
+#include "bootloader.h"
 #include "events.h"
 #include "font.h"
 #include "frame.h"
@@ -22,6 +23,7 @@ static struct {
     uint8_t mode, level;
     uint32_t t;
     bool night, charging, show_charge;
+    uint8_t boot_frames; /* > 0: showing the USB boot screen, then reboot */
 } p = {.level = 1};
 
 /* animation phase in 1/256 turns, advancing per_s units per second */
@@ -164,6 +166,24 @@ static void charging(uint32_t t)
     for (int i = 0; i < RGB_LEDS; i++)
         if (RGB[i].rank < cells * 7 / 10)
             fb_rgb(i, hsv((uint8_t)(cells * 85 / 10), 255, 200));
+}
+
+/* shown for a second before rebooting into the USB boot ROM: an arrow
+ * moving down the grid (towards the USB port), arms filling blue */
+static void usb_boot(uint32_t t)
+{
+    int shift = (int)(t * 4 / FPS); /* 4 rows per second */
+    for (int r = 0; r < 9; r++)
+        for (int c = 7; c <= 9; c++)
+            fb_grid(r + shift, c, 220);
+    static const uint8_t head[] = {7, 5, 3, 1};
+    for (int i = 0; i < 4; i++)
+        for (int c = 8 - head[i] / 2; c <= 8 + head[i] / 2; c++)
+            fb_grid(9 + i + shift, c, 255);
+    uint32_t fill = t * 7 / FPS;
+    for (int i = 0; i < RGB_LEDS; i++)
+        if (RGB[i].rank <= fill)
+            fb_rgb(i, (rgb_t){20, 60, 255});
 }
 
 /* ------------------------------------------------------------- life --- */
@@ -328,18 +348,29 @@ void anim_event(event_t ev, uint8_t arg)
     case EV_CHARGING:
         p.charging = p.show_charge = arg;
         break;
+    case EV_BOOTLOADER:
+        p.boot_frames = FPS;
+        break;
     }
 }
 
 uint8_t anim_brightness(void)
 {
-    return p.night ? NIGHT : BRIGHTNESS[p.level];
+    uint8_t b = p.night ? NIGHT : BRIGHTNESS[p.level];
+    /* make sure the boot screen is visible even in night mode */
+    return p.boot_frames && b < 64 ? 64 : b;
 }
 
 void anim_render(void)
 {
     uint32_t t = p.t++;
     memset(fb, 0, sizeof fb);
+    if (p.boot_frames) {
+        if (--p.boot_frames == 0)
+            reboot_to_boot_rom();
+        usb_boot(FPS - 1 - p.boot_frames);
+        return;
+    }
     if (p.show_charge) {
         charging(t);
         return;

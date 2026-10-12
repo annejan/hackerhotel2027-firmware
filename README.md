@@ -65,10 +65,10 @@ How the chip gets into the boot ROM (none of this is tested on a CH643 yet):
   application flash is empty. The CH32X035 has the same core and memory map
   as the CH643 (ch32-data uses one memory file for both). If the CH643 does
   the same, new badges can be flashed straight over USB.
-- **From firmware**: WCH's `SystemReset_StartMode(Start_Mode_BOOT)` sets
-  FLASH_STATR.BOOT_MODE (after the BOOT_MODEKEYR keys), and the next
-  software reset starts the boot ROM. Firmware can do this on a touch
-  gesture, which makes updates possible without opening anything.
+- **From firmware**: hold T1 + T4 for 3 s. The firmware does what WCH's
+  `SystemReset_StartMode(Start_Mode_BOOT)` does (set FLASH_STATR.BOOT_MODE
+  after the BOOT_MODEKEYR keys) and resets; the boot ROM then starts.
+  See `src/bootloader.rs` / `c/src/bootloader.c`.
 - **Pins**: on the CH32X035 the boot ROM runs when PC16 is low and PC17 is
   high at power-on. The badge has nothing that pulls PC17 high, so this
   needs a pad or button.
@@ -87,6 +87,7 @@ button that pulls PC17 (D+) high at power-on.
 | `anim.rs` | Animations ported from `tools/sim/hh2027.py`: ripple, galaxy, heartbeat, scroller, life, fire, twinkle, charging |
 | `frame.rs` | Frame buffer, integer HSV, sin table helpers, RNG |
 | `ledpwm.rs` | CH643 LEDPWM driver: **mostly guesswork, see below** |
+| `bootloader.rs` | Reboot into the USB boot ROM (T1 + T4 chord) |
 | `generated.rs` | LED map, polar coordinates, gamma and sine tables (generated) |
 
 `tools/sim/hh2027.py` renders animation previews (GIF + MP4) on a KiCad 3D
@@ -96,11 +97,12 @@ the output goes to `previews/`. It needs numpy, scipy, Pillow and ffmpeg, and
 `--refresh` re-reads the board (kicad-cli + pcbnew).
 
 `c/` has a port of the same firmware to plain C (register level, no WCH
-peripheral library), for comparison. It is about half the size: 8.1 KB of
-flash against 15.2 KB. See `c/README.md` for why.
+peripheral library), for comparison. It is about half the size: 8.5 KB of
+flash against 16.0 KB. See `c/README.md` for why.
 
 Controls: T1 next, T2 previous, T3 brightness, T4 restart. Hold any pad to
-toggle night mode. While charging, a battery gauge shows until the next tap.
+toggle night mode. Hold **T1 + T4 for 3 s** to reboot into the USB boot ROM
+for flashing (an arrow runs down the grid first). While charging, a battery gauge shows until the next tap.
 
 ## What is solid and what is guessed
 

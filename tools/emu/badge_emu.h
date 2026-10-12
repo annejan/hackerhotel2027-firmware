@@ -16,7 +16,7 @@ enum {
     EMU_HOLD = 2,       /* arg = button, held 600 ms */
     EMU_CHARGING = 3,   /* arg = 1 while charging */
     EMU_BOOTLOADER = 4, /* ◀ + ▶ held 3 s */
-    EMU_SELFTEST = 5,   /* A + B held 3 s: the bring-up test (C firmware) */
+    EMU_SELFTEST = 5,   /* A + B held 3 s: the bring-up test */
 };
 
 /* one frame: grid (16 rows x 17 columns, 0 where the octagon has no LED),
@@ -35,13 +35,13 @@ void emu_event(uint8_t kind, uint8_t arg);
 uint32_t emu_render(uint8_t held, uint8_t *out);
 uint8_t emu_brightness(void);      /* 0..255, before gamma */
 
-/* Optional (C firmware only for now): one packet of the badge's USB
+/* Optional: one packet of the badge's USB
  * protocol (c/src/proto.h), as if it came in over WebUSB. Fills out[64]
  * with the reply and returns its length. emu.py --web uses it to let the
  * browser page talk to the emulator. */
 int emu_usb(const uint8_t *in, int len, uint8_t *out);
 
-/* Optional (C firmware only for now): infrared. emu_ir_tx fills out[64]
+/* Optional: infrared. emu_ir_tx fills out[64]
  * with a packet the firmware wants to send (irproto.h format) and returns
  * its length, or 0. emu_ir_rx hands it a packet from another badge; it
  * goes through the badge's pulse decoder. emu.py passes them between the
@@ -49,6 +49,6 @@ int emu_usb(const uint8_t *in, int len, uint8_t *out);
 int emu_ir_tx(uint8_t *out);
 void emu_ir_rx(const uint8_t *in, int len);
 
-/* Optional (C firmware only): one line for the UART console (console.h).
+/* Optional: one line for the UART console (console.h, console.rs).
  * The firmware's log goes to stderr. */
 void emu_console(const char *line);

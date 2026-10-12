@@ -6,8 +6,8 @@ flash), the hotel screen, the animations, all six games, the ◀ + ▶
 reboot into the USB boot ROM, a USB device for the WebUSB setup page
 (`src/usb.c`, `src/proto.c`), infrared name swapping with a UART log
 and console (`src/ir.c`, `src/irproto.c`, `src/uart.c`, `src/console.c`),
-and a bring-up test for new boards (`src/selftest.c`); those are C only
-so far.
+and a bring-up test for new boards (`src/selftest.c`). The Rust firmware
+has all of these too.
 It is plain C on registers, with no WCH peripheral library and no libc. It runs as one
 super-loop scheduled on a free-running SysTick. Interrupts: the LED
 scanner at the end of each row, and for infrared the SysTick compare
@@ -26,14 +26,14 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 ## Size compared with Rust
 
-C has USB, infrared, the UART console and the bring-up test (2.8 KB, plus
-0.75 KB for the slot-to-designator table) on top; Rust does not have them yet.
+Same features in both (the bring-up test is 2.8 KB in C, plus 0.75 KB for
+the slot-to-designator table).
 
 | | Flash | Static RAM |
 |---|---|---|
 | C, with USB, IR, the UART console and the bring-up test | 32.0 KB | 6.4 KB (+ 2 KB stack) |
-| Rust + Embassy, `opt-level = "s"` | 35.4 KB | 3.1 KB (+ stack) |
-| Rust + Embassy, `opt-level = "z"` | 31.9 KB | 3.1 KB (+ stack) |
+| Rust + Embassy, `opt-level = "s"` | 49.8 KB | 4.7 KB (+ stack) |
+| Rust + Embassy, `opt-level = "z"` | 45.4 KB | 4.7 KB (+ stack) |
 
 About 3 KB of the difference is the Embassy executor, time driver and HAL
 interrupt handlers, which the super-loop does not need. The rest is code

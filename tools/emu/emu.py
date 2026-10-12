@@ -7,9 +7,9 @@
 
 --web also serves the badge's setup page (docs/webusb) on
 http://localhost:8027/ and passes its packets to the firmware, as WebUSB
-would on a real badge (C firmware only for now).
+would on a real badge.
 
-Infrared (C firmware): every emulator on this PC shares one "room" (UDP
+Infrared: every emulator on this PC shares one "room" (UDP
 broadcast on 127.255.255.255:8028), so start two and press B on one's
 name tag: they swap names. Lines typed on stdin go to the badge's UART
 console (try `help`); its log appears on stderr. --no-ir leaves the room.
@@ -454,7 +454,7 @@ def main(args):
     web = None
     if "--web" in args:
         if not fw.has_usb:
-            sys.exit(f"--web: the {fw.name} firmware library has no emu_usb (the USB protocol is C only for now)")
+            sys.exit(f"--web: the {fw.name} firmware library has no emu_usb (build it again?)")
         web = WebBridge()
         url = f"http://localhost:{WEB_PORT}/"
         print(f"setup page: {url}", flush=True)

@@ -37,6 +37,21 @@ fn soak(frames: u32) {
             if x % 4001 == 0 {
                 a.handle(Event::Charging(x & 1 == 0));
             }
+            if x % 997 == 0 {
+                // infrared: random packets, some garbage
+                let junk: Vec<u8> = (0..(x >> 3) % 30).map(|_| rng.next() as u8).collect();
+                let ty = [b'H', b'R', b'T', junk.first().copied().unwrap_or(0)][(x >> 1) as usize % 4];
+                a.ir_received(ty, &junk);
+            }
+            if x % 1013 == 0 {
+                let _ = a.ir_take(); // what the IR task does
+            }
+            if x % 7919 == 0 {
+                a.handle(Event::Selftest); // left again by a random Hold(2)
+            }
+            if x % 5003 == 0 {
+                a.handle(Event::Hold((x >> 16) as u8 % 4));
+            }
             if x % 3001 == 0 {
                 a.handle(Event::Hold(2)); // menu
                 a.handle(Event::Tap(3));

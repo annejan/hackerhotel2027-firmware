@@ -165,7 +165,7 @@ met. Tap any button to close a greeting early.
 A greeting waits while the menu or EDIT NAME is open or a game is being
 played, and shows when you are done. The answer goes out straight away.
 
-This is in the C firmware only so far, and not tested on a badge. On the
+Not tested on a badge yet. On the
 current board the IR receiver has no supply (see the
 [hardware notes](../README.md#hardware-notes-found-along-the-way)), so
 receiving needs a board fix first.
@@ -186,12 +186,12 @@ and received. Type a command and Enter:
 | `hello` | send the name over infrared, as B on the name tag does |
 | `test` | the [bring-up test](#bring-up-test-first-boards) |
 
-C firmware only. Pin 3 of J3 is the badge's VCC (battery or USB), not
+Pin 3 of J3 is the badge's VCC (battery or USB), not
 3.3 V: do not connect it to the adapter's supply.
 
 ## Bring-up test (first boards)
 
-For checking a freshly built board (C firmware): **hold A + B for 3 s**,
+For checking a freshly built board: **hold A + B for 3 s**,
 or type `test` on the UART console. Connect a serial terminal to J3 to
 see what each step should look like; every step and every button event
 is logged there. ◀ / ▶ go to the previous / next test, **hold A** leaves.
@@ -234,8 +234,7 @@ On Linux, give your user access to the badge's USB ID (1209:D035), for
 example with this udev rule:
 `SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="d035", MODE="0666"`.
 
-The USB part only exists in the C firmware so far, and it is not tested
-on a badge yet.
+The USB part is not tested on a badge yet.
 
 ## Emulator
 
@@ -260,19 +259,19 @@ make -C c emu && python3 tools/emu/emu.py c
 | `Esc` | Quit |
 
 The keys follow the same tap / hold / chord rules as the badge. Hold `↑`
-and `↓` together for 3 s for the bring-up test (C firmware). To open the
+and `↓` together for 3 s for the bring-up test. To open the
 menu from a game, hold `↑` alone for 0.6 s. Hold `←` and `→`
 together for 3 s to see the USB boot screen. The emulator then powers the
 firmware on again. A name saved with EDIT NAME stays saved over `R` and the
 reboot, as it would in flash. It is lost when you close the emulator.
 
-With the C firmware, every emulator on the PC shares one infrared "room"
+Every emulator on the PC shares one infrared "room"
 (UDP broadcast on 127.255.255.255:8028; `--no-ir` leaves it). Start two,
 press `B` on one's name tag, and they swap names. Lines typed into the
 terminal go to the badge's UART console (try `help`), and the badge's log
 appears there too.
 
-With `--web` (C firmware), the emulator also serves the setup page on
+With `--web`, the emulator also serves the setup page on
 <http://localhost:8027/>. Click **Connect emulator** there: the page then
 talks to the emulated badge the same way it talks to a real one over USB.
 

@@ -7,6 +7,14 @@
 
 #[path = "../../../src/anim.rs"]
 pub mod anim;
+#[path = "../../../src/console.rs"]
+pub mod console;
+#[path = "../../../src/irproto.rs"]
+pub mod irproto;
+#[path = "../../../src/log.rs"]
+pub mod log;
+#[path = "../../../src/selftest.rs"]
+pub mod selftest;
 #[path = "../../../src/app.rs"]
 pub mod app;
 #[path = "../../../src/editor.rs"]
@@ -39,6 +47,7 @@ pub enum Event {
     Hold(u8),
     Charging(bool),
     Bootloader,
+    Selftest,
 }
 
 pub const FRAME_BYTES: usize = GRID_H * GRID_W + EDGE.len() + RGB.len() * 3;
@@ -69,6 +78,24 @@ struct Emu {
     frame: frame::Frame,
     /// frames left of the USB boot screen; main.rs does this on the badge
     boot: Option<u32>,
+    /// LED rows "shown": 2930 a second, as on the badge (bring-up test)
+    rows: u32,
+    /// a packet waiting for the emulator (emu_ir_tx), and one that comes
+    /// straight back while the bring-up test listens to itself
+    ir_out: Option<Vec<u8>>,
+    ir_echo: Option<Vec<u8>>,
+}
+
+/// The firmware's log (log.rs) goes to stderr.
+fn flush_log() {
+    let mut out = Vec::new();
+    while let Some(b) = log::pop() {
+        out.push(b);
+    }
+    if !out.is_empty() {
+        use std::io::Write;
+        let _ = std::io::stderr().write_all(&String::from_utf8_lossy(&out).replace("\r\n", "\n").into_bytes());
+    }
 }
 
 static EMU: Mutex<Option<Emu>> = Mutex::new(None);
@@ -93,7 +120,14 @@ pub extern "C" fn emu_fps() -> u32 {
 #[no_mangle]
 pub extern "C" fn emu_init() {
     let name = FLASH_NAME.lock().unwrap().unwrap_or_default();
-    *EMU.lock().unwrap() = Some(Emu { app: app::App::new(name), frame: frame::Frame::new(), boot: None });
+    *EMU.lock().unwrap() = Some(Emu {
+        app: app::App::new(name),
+        frame: frame::Frame::new(),
+        boot: None,
+        rows: 0,
+        ir_out: None,
+        ir_echo: None,
+    });
 }
 
 #[no_mangle]
@@ -106,6 +140,7 @@ pub extern "C" fn emu_event(kind: u8, arg: u8) {
         2 => Event::Hold(arg),
         3 => Event::Charging(arg != 0),
         4 => Event::Bootloader,
+        5 => Event::Selftest,
         _ => return,
     };
     if ev == Event::Bootloader {
@@ -113,6 +148,8 @@ pub extern "C" fn emu_event(kind: u8, arg: u8) {
     } else {
         e.app.handle(ev);
     }
+    drop(emu);
+    flush_log();
 }
 
 #[no_mangle]
@@ -127,6 +164,11 @@ pub unsafe extern "C" fn emu_render(held: u8, out: *mut u8) -> u32 {
     let mut emu = EMU.lock().unwrap();
     let Some(e) = emu.as_mut() else { return 0 };
     e.frame.clear();
+    e.rows = e.rows.wrapping_add(2930 / anim::FPS);
+    e.app.hw = selftest::Hw { rows: e.rows, vbus: e.app.charging() };
+    if let Some(p) = e.ir_echo.take() {
+        receive(&mut e.app, &p);
+    }
     match e.boot {
         Some(t) if t >= anim::FPS => return 1, // rebooted into the boot ROM
         Some(t) => {
@@ -138,8 +180,88 @@ pub unsafe extern "C" fn emu_render(held: u8, out: *mut u8) -> u32 {
     if let Some(name) = e.app.saved_name() {
         *FLASH_NAME.lock().unwrap() = Some(name);
     }
+    // what main.rs's IR task does: take a packet for the "LED"
+    if e.ir_out.is_none() {
+        if let Some((ty, name)) = e.app.ir_take() {
+            let mut p = [0u8; irproto::PACKET_MAX];
+            let n = irproto::pack(ty, name.bytes(), &mut p);
+            if e.app.ir_loopback() {
+                e.ir_echo = Some(p[..n].to_vec());
+            }
+            e.ir_out = Some(p[..n].to_vec());
+        }
+    }
     dump(&e.frame, std::slice::from_raw_parts_mut(out, FRAME_BYTES));
+    drop(emu);
+    flush_log();
     0
+}
+
+/// A packet from another badge, turned into marks and spaces as the
+/// receiver would see them (marks a little long, spaces a little short),
+/// so it goes through the badge's decoder.
+fn receive(app: &mut app::App, p: &[u8]) {
+    let mut dec = irproto::Decoder::new();
+    let mut intervals = vec![(true, irproto::HDR_MARK_US + 100), (false, irproto::HDR_SPACE_US - 100)];
+    for k in 0..p.len() * 8 {
+        let one = p[k / 8] >> (k % 8) & 1 != 0;
+        intervals.push((true, irproto::BIT_MARK_US + 100));
+        intervals.push((false, if one { irproto::ONE_SPACE_US } else { irproto::ZERO_SPACE_US } - 100));
+    }
+    intervals.push((true, irproto::BIT_MARK_US + 100));
+    for (mark, us) in intervals {
+        if dec.feed(mark, us) > 0 {
+            let len = dec.buf[1] as usize;
+            app.ir_received(dec.buf[0], &dec.buf[2..2 + len]);
+            return;
+        }
+    }
+}
+
+/// The packet the firmware wants to send over IR: fills out[64], returns
+/// its length or 0.
+///
+/// # Safety
+/// `out` must point to 64 writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn emu_ir_tx(out: *mut u8) -> i32 {
+    let mut emu = EMU.lock().unwrap();
+    let Some(p) = emu.as_mut().and_then(|e| e.ir_out.take()) else { return 0 };
+    std::ptr::copy_nonoverlapping(p.as_ptr(), out, p.len());
+    p.len() as i32
+}
+
+/// A packet from another emulator.
+///
+/// # Safety
+/// `input` must point to `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn emu_ir_rx(input: *const u8, len: i32) {
+    let mut emu = EMU.lock().unwrap();
+    let Some(e) = emu.as_mut() else { return };
+    if input.is_null() || len <= 0 {
+        return;
+    }
+    receive(&mut e.app, std::slice::from_raw_parts(input, len as usize));
+    drop(emu);
+    flush_log();
+}
+
+/// One line for the UART console.
+///
+/// # Safety
+/// `line` must be a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn emu_console(line: *const c_char) {
+    let mut emu = EMU.lock().unwrap();
+    let Some(e) = emu.as_mut() else { return };
+    let line = std::ffi::CStr::from_ptr(line).to_string_lossy();
+    console::line(&mut e.app, &line);
+    if let Some(name) = e.app.saved_name() {
+        *FLASH_NAME.lock().unwrap() = Some(name);
+    }
+    drop(emu);
+    flush_log();
 }
 
 /// One packet of the badge's USB protocol, as if it came in over WebUSB;

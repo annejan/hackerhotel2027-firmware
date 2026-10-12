@@ -18,6 +18,7 @@
 //!   charge_monitor watches CHRG, sends Charging events
 //!   infrared       decodes received IR packets, sends the ones the app asks for
 //!   serial         the UART: the log out, console lines in
+//!   usb_device     the USB device (usb.rs), its packets to proto.rs
 //! The app is shared between the tasks (`with_app`).
 #![no_std]
 #![no_main]
@@ -32,6 +33,7 @@ mod irproto;
 mod log;
 mod selftest;
 mod uart;
+mod usb;
 mod editor;
 mod font;
 mod frame;
@@ -40,6 +42,7 @@ mod games;
 mod generated;
 mod ledpwm;
 mod nametag;
+mod proto;
 mod store;
 
 use core::cell::{RefCell, UnsafeCell};
@@ -115,6 +118,15 @@ async fn infrared() {
 }
 
 #[embassy_executor::task]
+async fn usb_device() {
+    let mut usb = usb::Usb::new();
+    loop {
+        usb.poll(|packet, reply| with_app(|app| proto::handle(app, packet, reply)));
+        Timer::after_micros(500).await;
+    }
+}
+
+#[embassy_executor::task]
 async fn serial() {
     let mut uart = uart::Uart::new();
     loop {
@@ -183,6 +195,7 @@ async fn main(spawner: Spawner) -> ! {
     start_app(App::new(name));
     spawner.spawn(infrared().unwrap());
     spawner.spawn(serial().unwrap());
+    spawner.spawn(usb_device().unwrap());
     let mut frame = Frame::new();
     let mut ticker = Ticker::every(Duration::from_hz(anim::FPS as u64));
 

@@ -25,8 +25,8 @@ every game, the name tag and the emulator. The short version:
 | Name, hotel, animations | ◀ / ▶ previous / next screen, A brightness |
 | Games | play themselves until you press ◀, ▶ or B |
 | **Hold ◀ + ▶, 3 s** | reboot into the USB boot ROM for flashing |
-| **B** on the name tag | send your name over infrared; a badge that gets it says HI with your name and sends its own back (C firmware) |
-| **Hold A + B, 3 s** | bring-up test for a new board: COM / PWM / LED walks with designators on the UART, scan rate, IR loopback, power (C firmware; [details](docs/USAGE.md#bring-up-test-first-boards)) |
+| **B** on the name tag | send your name over infrared; a badge that gets it says HI with your name and sends its own back |
+| **Hold A + B, 3 s** | bring-up test for a new board: COM / PWM / LED walks with designators on the UART, scan rate, IR loopback, power ([details](docs/USAGE.md#bring-up-test-first-boards)) |
 
 ◀ and ▶ are the two buttons on the front of the lower legs (thumbs), A and
 B the two on the back of the side arms (A right, B left).
@@ -38,41 +38,46 @@ build-time default: `BADGE_NAME="ANNE JAN" cargo build --release` (C:
 
 ## Setup page (WebUSB)
 
-The C firmware is a USB device with a small vendor protocol, and
+Both firmwares are a USB device with a small vendor protocol, and
 [`docs/webusb/index.html`](docs/webusb/index.html) is a page that talks to it
 from Chrome or Edge with WebUSB: set your name (saved in flash), pick what
 the badge shows, set the brightness. It also shows the badge's state as it
 changes. No driver install is needed on Linux and macOS; on Windows the
 badge says so itself (Microsoft OS 2.0 descriptor, WinUSB).
 
-Try it without a badge: `python3 tools/emu/emu.py c --web` serves the page
+Try it without a badge: `python3 tools/emu/emu.py c --web` (or `rust`) serves the page
 on <http://localhost:8027/> and passes its packets to the emulated firmware,
 so the page, the protocol and the badge's reaction are tested together.
 
-The USB driver (`c/src/usb.c`) is ported from the ch32fun-based WebUSB test
-that the badge team ran on a CH32X035, where it enumerated and passed bulk
-data. The CH643's USB block has the same address and registers, but the
-port is **not tested on a CH643 yet**. The protocol is in `c/src/proto.h`.
+The USB driver (`c/src/usb.c`, and `src/usb.rs` with byte-identical
+descriptors) is ported from the ch32fun-based WebUSB test that the badge
+team ran on a CH32X035, where it enumerated and passed bulk data. The
+CH643's USB block has the same address and registers, but the port is
+**not tested on a CH643 yet**. The protocol is in `c/src/proto.h` /
+`src/proto.rs`; INFO says which firmware answers (`c` or `r`).
 It uses the pid.codes test ID 1209:D035 for now; a real badge needs its own.
 
-## Infrared and the UART console (C firmware)
+## Infrared and the UART console
 
 **Name swap.** B on the name tag sends your name over infrared. A badge
 that receives it shows "HI" and your name, and answers with its own name,
 which yours then shows: one press, and both know who they met. The format
 is NEC-style pulse-distance coding on 38 kHz, with a type, a length and a
-CRC (`c/src/irproto.h`). TIM1 CH4 makes the carrier on PB23 and the
-SysTick compare interrupt switches it at each mark and space; the
-receiver's edges come in on an EXTI interrupt (`c/src/ir.c`). The driver is tested on the PC against a fake
-SysTick and GPIO (waveform out decodes, distorted edges in decode, own
-echo ignored), not on a badge. Note the hardware issue below: the IR
+CRC (`c/src/irproto.h`, `src/irproto.rs`). TIM1 CH4 makes the carrier on
+PB23 in both. In C the SysTick compare interrupt switches it at each mark
+and space and the receiver's edges come in on EXTI (`c/src/ir.c`); in
+Rust, where Embassy owns SysTick, TIM3 times the marks and spaces and TIM2
+CH4 captures the receiver's edges (`src/ir.rs`). The C driver is tested on
+the PC against a fake SysTick and GPIO (waveform out decodes, distorted
+edges in decode, own echo ignored); neither is tested on a badge. C and
+Rust badges swap names with each other (checked in the emulator). Note the hardware issue below: the IR
 receiver has no supply on the current board.
 
 **UART console.** The UART header J3 (115200 8N1) prints a log (boot,
 names saved, IR packets) and takes commands: `help`, `info`,
 `name TEXT`, `show N`, `level N`, `hello`, `test`.
 
-Both work in the emulator: every C emulator on a PC shares one infrared
+Both work in the emulator: every emulator on a PC shares one infrared
 "room" (UDP broadcast on 127.255.255.255:8028), so start two and press B
 on one; stdin is the console and the log goes to stderr.
 
@@ -178,6 +183,10 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `ledpwm.rs` | CH643 LEDPWM driver, from the reference manual: one interrupt per row, double-buffered frames |
 | `bootloader.rs` | Reboot into the USB boot ROM |
 | `generated.rs` | LED map, polar coordinates, gamma and sine tables (generated) |
+| `usb.rs`, `proto.rs` | USB device on the registers (WebUSB setup page), and its protocol |
+| `ir.rs`, `irproto.rs` | Infrared: TIM1 carrier, TIM3 timing, TIM2 capture; packets and pulse decoder |
+| `uart.rs`, `console.rs`, `log.rs` | UART header: the log out, console commands in |
+| `selftest.rs` | Bring-up test for new boards |
 
 `c/` has a port of the same firmware to plain C (register level, no WCH
 peripheral library), for comparison; see `c/README.md` and the sizes below.
@@ -198,15 +207,18 @@ The Python tools need numpy, scipy, Pillow and ffmpeg.
 ## Size
 
 Everything above (name tag and name entry, hotel screen, menu, 6
-animations, 6 games, the USB boot gesture; in C also the USB device, the
-infrared name swap and the UART console), measured. The last 256 bytes of
+animations, 6 games, the USB boot gesture, the USB device, the infrared
+name swap, the UART console and the bring-up test), measured. The last 256 bytes of
 flash are kept for the saved name.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os`, with USB, IR, UART and the bring-up test | **32.0 KB** (52%) | 6.4 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` | 31.9 KB (51%) | 3.1 KB + stack |
-| Rust + Embassy, `opt-level = "s"` (default) | **35.4 KB** (57%) | 3.1 KB + stack |
+| C, GCC 15 `-Os` | **32.0 KB** (52%) | 6.4 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` | 45.4 KB (73%) | 4.7 KB + stack |
+| Rust + Embassy, `opt-level = "s"` (default) | **49.8 KB** (80%) | 4.7 KB + stack |
+
+Rust is getting close to full: if more is added there, switch the release
+profile to `opt-level = "z"` first.
 
 Roughly where the C flash goes: animations 4.0 KB, the app (menu, USB
 settings, infrared greeting) 3.4 KB, Startris 2.5 KB, LED tables 2.2 KB,
@@ -271,6 +283,6 @@ more games either way.
   (TIM2_RM = 001 puts CH1 on PB21).
 - **No battery gauge.** The board has no battery-voltage sense, so the
   firmware can show *that* the battery charges but not *how full* it is.
-- **USB in Rust.** ch32-hal has no USB driver for the CH643, so only the C
-  firmware is a USB device so far (see Setup page). The Rust firmware would
-  need an embassy-usb driver for the CH643's USB block.
+- **USB in Rust.** ch32-hal has no USB driver for the CH643, so `src/usb.rs`
+  drives the USB block on its registers, polled from a task every 0.5 ms,
+  like the C driver (not embassy-usb).

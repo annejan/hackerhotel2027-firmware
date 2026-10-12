@@ -197,6 +197,63 @@ impl App {
         LEVELS[self.level]
     }
 
+    // What a connected computer may read and set (USB protocol, console).
+
+    pub fn items() -> usize {
+        ITEMS.len()
+    }
+
+    pub fn label(i: usize) -> &'static str {
+        ITEMS.get(i).map_or("", |&(_, label)| label)
+    }
+
+    pub fn item(&self) -> usize {
+        self.item
+    }
+
+    /// Show item `i`; false for the menu-only entries (EDIT NAME, LIGHT).
+    pub fn set_item(&mut self, i: usize) -> bool {
+        if i >= ITEMS.len() || matches!(ITEMS[i].0, Item::EditName | Item::Light) {
+            return false;
+        }
+        self.menu = None;
+        self.editor = None;
+        self.show_charge = false;
+        self.select(i);
+        true
+    }
+
+    pub fn levels() -> usize {
+        LEVELS.len()
+    }
+
+    pub fn level(&self) -> usize {
+        self.level
+    }
+
+    pub fn set_level(&mut self, level: usize) {
+        if level < LEVELS.len() {
+            self.level = level;
+        }
+    }
+
+    pub fn name(&self) -> Name {
+        self.name
+    }
+
+    /// Use this name from now on, and hand it to main.rs to keep in flash.
+    pub fn set_name(&mut self, name: Name) {
+        self.name = name;
+        self.saved = Some(name);
+        if self.editor.take().is_some() {
+            self.select(0); // the editor held an old copy
+        }
+    }
+
+    pub fn charging(&self) -> bool {
+        self.charging
+    }
+
     /// `held`: buttons down right now, bit n = button n (◀ B A ▶).
     pub fn render(&mut self, f: &mut Frame, held: u8) {
         let t = self.t;

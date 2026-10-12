@@ -1,4 +1,4 @@
-/* The only libc functions the compiler may emit calls to. The firmware is
+/* The few libc functions the firmware and the compiler need. The firmware is
  * linked without a C library (-nostdlib) to keep it small. */
 #include <stddef.h>
 
@@ -17,4 +17,12 @@ void *memcpy(void *restrict dst, const void *restrict src, size_t n)
     while (n--)
         *d++ = *s++;
     return dst;
+}
+
+size_t strlen(const char *s)
+{
+    const char *p = s;
+    while (*p)
+        p++;
+    return (size_t)(p - s);
 }

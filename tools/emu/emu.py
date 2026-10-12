@@ -3,7 +3,11 @@
 
   make -C c emu                      # C firmware   -> c/build/libhh27.so
   (cd tools/fwsim && cargo build --release)   # Rust -> tools/fwsim/target/*/release/libfwsim.so
-  python3 tools/emu/emu.py [c|rust|path/to/lib.so]
+  python3 tools/emu/emu.py [c|rust|path/to/lib.so] [--web]
+
+--web also serves the badge's setup page (docs/webusb) on
+http://localhost:8027/ and passes its packets to the firmware, as WebUSB
+would on a real badge (C firmware only for now).
 
 The library holds the hardware-independent firmware (app, menu, games,
 animations; interface in badge_emu.h). This program stands in for the rest:
@@ -14,8 +18,12 @@ Keys: 1 2 3 4 or Left Down Up Right = T1 T2 T3 T4 (or click the pads),
 C = USB power on/off, R = reset, Esc = quit.
 """
 import ctypes
+import queue
 import sys
+import threading
 import time
+import webbrowser
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import tkinter as tk
 from pathlib import Path
 
@@ -67,7 +75,18 @@ class Firmware:
         self.name = lib.emu_firmware().decode()
         self.fps = lib.emu_fps()
         self.buf = (ctypes.c_uint8 * FRAME_BYTES)()
+        self.has_usb = hasattr(lib, "emu_usb")
+        if self.has_usb:
+            lib.emu_usb.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.POINTER(ctypes.c_uint8)]
+            lib.emu_usb.restype = ctypes.c_int
         lib.emu_init()
+
+    def usb(self, packet):
+        """One packet of the badge's USB protocol; returns the reply."""
+        data = (ctypes.c_uint8 * 64).from_buffer_copy(packet[:64].ljust(64, b"\0"))
+        out = (ctypes.c_uint8 * 64)()
+        n = self.lib.emu_usb(data, min(len(packet), 64), out)
+        return bytes(out[:n])
 
     def event(self, kind, arg=0):
         self.lib.emu_event(kind, arg)
@@ -75,6 +94,53 @@ class Firmware:
     def render(self, held):
         rebooted = self.lib.emu_render(held, self.buf)
         return rebooted, np.frombuffer(self.buf, np.uint8).copy()
+
+
+WEB_PORT = 8027
+WEB_ROOT = REPO / "docs" / "webusb"
+
+
+class WebBridge:
+    """The setup page and a /usb endpoint on localhost. Packets are handed
+    to the Tk thread through a queue, so the firmware only ever runs there."""
+
+    def __init__(self):
+        self.requests = queue.Queue()
+        bridge = self
+
+        class Handler(SimpleHTTPRequestHandler):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, directory=str(WEB_ROOT), **kw)
+
+            def do_POST(self):
+                if self.path.rstrip("/") != "/usb":
+                    return self.send_error(404)
+                packet = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                box = {"done": threading.Event()}
+                bridge.requests.put((packet, box))
+                if not box["done"].wait(2):
+                    return self.send_error(504, "emulator busy")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(box["reply"])))
+                self.end_headers()
+                self.wfile.write(box["reply"])
+
+            def log_message(self, *a):
+                pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", WEB_PORT), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def serve(self, fw):
+        """Answer the waiting packets (from the Tk thread)."""
+        while True:
+            try:
+                packet, box = self.requests.get_nowait()
+            except queue.Empty:
+                return
+            box["reply"] = fw.usb(packet)
+            box["done"].set()
 
 
 class Touch:
@@ -175,8 +241,9 @@ class FastRenderer:
 
 
 class App:
-    def __init__(self, fw):
+    def __init__(self, fw, web=None):
         self.fw = fw
+        self.web = web
         self.touch = Touch(fw.event)
         self.renderer = FastRenderer()
         self.charging = False
@@ -245,6 +312,8 @@ class App:
         self.message, self.message_until = text, time.monotonic() + seconds
 
     def tick(self):
+        if self.web:
+            self.web.serve(self.fw)
         self.touch.poll()
         held = self.touch.held()
         rebooted, frame = self.fw.render(held)
@@ -268,7 +337,8 @@ class App:
         msg = f"  ·  {self.message}" if now < self.message_until else ""
         self.canvas.itemconfigure(
             self.status, text=f"{self.fw.name} firmware  ·  {self.fps:4.1f} fps  ·  brightness {b:3d}"
-                              f"{'  ·  charging' if self.charging else ''}{msg}")
+                              f"{'  ·  charging' if self.charging else ''}"
+                              f"{f'  ·  web: localhost:{WEB_PORT}' if self.web else ''}{msg}")
 
         self.next += self.period
         delay = self.next - time.monotonic()
@@ -281,9 +351,19 @@ def main(args):
     if "-h" in args or "--help" in args:
         print(__doc__)
         return
-    fw = Firmware(find_lib(args[0] if args else None))
+    names = [a for a in args if not a.startswith("--")]
+    fw = Firmware(find_lib(names[0] if names else None))
     print(f"{fw.name} firmware, {fw.fps} fps", flush=True)
-    App(fw).root.mainloop()
+    web = None
+    if "--web" in args:
+        if not fw.has_usb:
+            sys.exit(f"--web: the {fw.name} firmware library has no emu_usb (the USB protocol is C only for now)")
+        web = WebBridge()
+        url = f"http://localhost:{WEB_PORT}/"
+        print(f"setup page: {url}", flush=True)
+        if "--no-browser" not in args:
+            webbrowser.open(url)
+    App(fw, web).root.mainloop()
 
 
 if __name__ == "__main__":

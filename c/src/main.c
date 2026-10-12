@@ -12,6 +12,7 @@
 #include "ledpwm.h"
 #include "store.h"
 #include "touch.h"
+#include "usb.h"
 
 #define CHRG_PIN 22 /* PB22, XT4054 CHRG: open-drain, low while charging */
 
@@ -45,10 +46,12 @@ int main(void)
     if (!store_load(&name))
         name_default(&name);
     app_init(&name);
+    usb_init();
 
     uint32_t next_touch = ticks(), next_chrg = ticks(), next_frame = ticks();
     int charging = -1;
     for (;;) {
+        usb_poll();
         if (due(&next_touch, TOUCH_POLL_MS * tick_ms))
             touch_poll();
         if (due(&next_chrg, 500 * tick_ms)) {

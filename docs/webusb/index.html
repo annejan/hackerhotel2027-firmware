@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starfish Badge Setup</title>
+<style>
+  :root {
+    --bg: #0f1116;
+    --panel: #171a21;
+    --line: #2a2f3a;
+    --text: #ece9e2;
+    --muted: #9aa0ab;
+    --accent: #e0461e;
+    --ok: #3ecf6e;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f2ee; --panel: #ffffff; --line: #ddd8cf; --text: #1d1f24; --muted: #5d6370;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f2ee; --panel: #ffffff; --line: #ddd8cf; --text: #1d1f24; --muted: #5d6370;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  section {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 14px;
+  }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, select, input {
+    font: inherit; color: var(--text); background: transparent;
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled, select:disabled, input:disabled { opacity: .45; cursor: default; }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  input[type="text"] { flex: 1 1 220px; min-width: 0; text-transform: uppercase; letter-spacing: .04em; }
+  select { flex: 1 1 220px; min-width: 0; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+  .dot.on { background: var(--ok); }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  .error { color: var(--accent); }
+  .levels button { flex: 1 1 0; min-width: 64px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Starfish badge</h1>
+  <p class="sub">Hacker Hotel 2027 — set your name and pick what the badge shows.</p>
+
+  <section>
+    <h2>Connection</h2>
+    <div class="row">
+      <button class="primary" id="usb">Connect badge (USB)</button>
+      <button id="emu" hidden>Connect emulator</button>
+    </div>
+    <p class="status"><span class="dot" id="dot"></span><span id="state">Not connected.</span></p>
+    <p class="hint" id="nousb" hidden>This browser has no WebUSB. Use Chrome or Edge on a computer.</p>
+  </section>
+
+  <section>
+    <h2>Name</h2>
+    <form class="row" id="nameform">
+      <input type="text" id="name" maxlength="24" autocomplete="off" spellcheck="false" disabled>
+      <button class="primary" id="save" disabled>Save</button>
+    </form>
+    <p class="hint">Letters, digits, spaces and <code>- . ! ? ' * : / # @</code>. Saved in the badge's flash.</p>
+  </section>
+
+  <section>
+    <h2>Show</h2>
+    <div class="row">
+      <select id="item" disabled></select>
+    </div>
+  </section>
+
+  <section>
+    <h2>Brightness</h2>
+    <div class="row levels" id="levels"></div>
+    <p class="hint" id="charging"></p>
+  </section>
+</main>
+
+<script>
+// The badge's USB protocol (c/src/proto.h): one command packet out, one
+// reply packet in, the reply starting with the command byte (0xFF: error).
+const CMD = { INFO: 1, GET_NAME: 2, SET_NAME: 3, GET_STATE: 4, SET_ITEM: 5, SET_LEVEL: 6, GET_LABEL: 7 };
+const VID = 0x1209, PID = 0xD035;
+const LEVEL_NAMES = ["Night", "5%", "12.5%", "31%", "Full"];
+const MENU_ONLY = ["EDIT NAME", "LIGHT"];
+const ALLOWED = /[^A-Z0-9 \-.!?'*:/#@]/g;
+
+const $ = id => document.getElementById(id);
+let link = null;            // { send(bytes) -> reply bytes, close() }
+let queue = Promise.resolve();
+let info = null, poll = null;
+
+// one command at a time: the badge answers each packet before the next
+function command(...bytes) {
+  const run = queue.then(() => link.send(new Uint8Array(bytes)));
+  queue = run.catch(() => {});
+  return run.then(reply => {
+    if (reply[0] === 0xFF) throw new Error(`badge refused command ${bytes[0]}`);
+    return reply;
+  });
+}
+
+async function usbLink() {
+  const dev = await navigator.usb.requestDevice({ filters: [{ vendorId: VID, productId: PID }] });
+  await dev.open();
+  if (dev.configuration === null) await dev.selectConfiguration(1);
+  await dev.claimInterface(0);
+  return {
+    async send(bytes) {
+      await dev.transferOut(2, bytes);
+      const r = await dev.transferIn(1, 64);
+      return new Uint8Array(r.data.buffer);
+    },
+    close: () => dev.close(),
+    what: "badge over USB",
+  };
+}
+
+function emuLink() {
+  return {
+    async send(bytes) {
+      const r = await fetch("usb", { method: "POST", body: bytes });
+      if (!r.ok) throw new Error(`emulator: ${r.status}`);
+      return new Uint8Array(await r.arrayBuffer());
+    },
+    close() {},
+    what: "emulator",
+  };
+}
+
+const text = (bytes, at) => new TextDecoder().decode(bytes.slice(at + 1, at + 1 + bytes[at]));
+
+async function connect(make) {
+  try {
+    link = await make();
+    const r = await command(CMD.INFO);
+    info = { version: r[1], items: r[2], levels: r[3], nameMax: r[4], firmware: String.fromCharCode(r[5]) };
+    $("name").maxLength = info.nameMax;
+    const labels = [];
+    for (let i = 0; i < info.items; i++) labels.push(text(await command(CMD.GET_LABEL, i), 2));
+    $("item").replaceChildren(...labels.map((l, i) => {
+      const o = new Option(l, i);
+      o.disabled = MENU_ONLY.includes(l);
+      return o;
+    }).filter(o => !o.disabled));
+    $("levels").replaceChildren(...LEVEL_NAMES.slice(0, info.levels).map((n, i) => {
+      const b = document.createElement("button");
+      b.textContent = n;
+      b.onclick = () => command(CMD.SET_LEVEL, i).then(showState).catch(fail);
+      return b;
+    }));
+    $("name").value = text(await command(CMD.GET_NAME), 1);
+    for (const id of ["name", "save", "item"]) $(id).disabled = false;
+    $("dot").classList.add("on");
+    $("state").textContent = `Connected to the ${link.what} (${info.firmware} firmware, protocol ${info.version}).`;
+    await refresh();
+    poll = setInterval(refresh, 1000); // pick up changes made on the badge
+  } catch (e) {
+    fail(e);
+  }
+}
+
+async function refresh() {
+  try { showState(await command(CMD.GET_STATE)); } catch (e) { fail(e); }
+}
+
+function showState(r) {
+  const [, item, level, charging] = r;
+  if (document.activeElement !== $("item")) $("item").value = item;
+  [...$("levels").children].forEach((b, i) => b.setAttribute("aria-pressed", i === level));
+  $("charging").textContent = charging ? "Charging." : "";
+}
+
+function fail(e) {
+  if (e && e.name === "NotFoundError") return; // closed the device chooser
+  clearInterval(poll);
+  link = null;
+  $("dot").classList.remove("on");
+  $("state").innerHTML = "";
+  $("state").append(Object.assign(document.createElement("span"), { className: "error", textContent: String(e.message || e) }));
+  for (const id of ["name", "save", "item"]) $(id).disabled = true;
+}
+
+$("name").addEventListener("input", e => {
+  const v = e.target.value.toUpperCase().replace(ALLOWED, "");
+  if (v !== e.target.value) e.target.value = v;
+});
+$("nameform").addEventListener("submit", async e => {
+  e.preventDefault();
+  const bytes = [...new TextEncoder().encode($("name").value.trimEnd())];
+  try {
+    const r = await command(CMD.SET_NAME, bytes.length, ...bytes);
+    $("name").value = text(r, 1);
+    $("save").textContent = "Saved";
+    setTimeout(() => ($("save").textContent = "Save"), 1500);
+  } catch (err) { fail(err); }
+});
+$("item").addEventListener("change", e => command(CMD.SET_ITEM, +e.target.value).then(showState).catch(fail));
+
+$("usb").onclick = () => connect(usbLink);
+$("emu").onclick = () => connect(emuLink);
+if (!navigator.usb) { $("usb").disabled = true; $("nousb").hidden = false; }
+// served by `python3 tools/emu/emu.py c --web`
+if (location.protocol.startsWith("http") && location.port === "8027") $("emu").hidden = false;
+navigator.usb?.addEventListener("disconnect", () => fail(new Error("Badge unplugged.")));
+</script>
+</body>
+</html>

@@ -151,6 +151,29 @@ make -C c NAME="ANNE JAN"                        # C
 The font has upper-case letters, digits and ` !'*-.:?/#@`. Lower case shows
 as upper case. Names up to 3 characters stand still. Longer names scroll.
 
+## Setup page
+
+Plug the badge into a computer and open the setup page,
+[`docs/webusb/index.html`](webusb/index.html), in Chrome or Edge. Firefox
+and Safari have no WebUSB. Click **Connect badge (USB)** and pick the
+badge. Then you can:
+
+- type your name and click **Save**. It is saved in flash, the same as
+  EDIT NAME.
+- pick what the badge shows (all screens and games, except the menu-only
+  entries EDIT NAME and LIGHT).
+- set the brightness.
+
+The page reads the badge's state every second, so changes made with the
+pads show up on the page as well.
+
+On Linux, give your user access to the badge's USB ID (1209:D035), for
+example with this udev rule:
+`SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="d035", MODE="0666"`.
+
+The USB part only exists in the C firmware so far, and it is not tested
+on a badge yet.
+
 ## Emulator
 
 The emulator runs the real firmware code on a PC. The C or Rust firmware
@@ -174,6 +197,10 @@ menu from a game, hold `3` (or `↑`) alone for 0.6 s. Hold `1` and `4`
 together for 3 s to see the USB boot screen. The emulator then powers the
 firmware on again. A name saved with EDIT NAME stays saved over `R` and the
 reboot, as it would in flash. It is lost when you close the emulator.
+
+With `--web` (C firmware), the emulator also serves the setup page on
+<http://localhost:8027/>. Click **Connect emulator** there: the page then
+talks to the emulated badge the same way it talks to a real one over USB.
 
 The emulator needs Python with tkinter, numpy, scipy and Pillow. The
 interface between the emulator and the firmware is in

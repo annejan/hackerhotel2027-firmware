@@ -2,8 +2,9 @@
 
 Same firmware as the Rust one in `../src`: LED map, LEDPWM driver (same
 guesses), TouchKey, CHRG, the menu, the name tag with name entry (kept in
-flash), the hotel screen, the animations, all six games and the T1 + T4
-reboot into the USB boot ROM.
+flash), the hotel screen, the animations, all six games, the T1 + T4
+reboot into the USB boot ROM, and a USB device for the WebUSB setup page
+(`src/usb.c`, `src/proto.c`; C only so far).
 It is plain C on registers, with no WCH peripheral library and no libc. It runs as one
 super-loop scheduled on a free-running SysTick, with no interrupts.
 
@@ -22,7 +23,8 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, GCC 15 `-Os` (xPack) | 21.9 KB | 4.7 KB (+ 2 KB stack) |
+| C, GCC 15 `-Os` (xPack), without USB | 21.9 KB | 4.7 KB (+ 2 KB stack) |
+| C, with the USB device | 24.3 KB | 5.0 KB (+ 2 KB stack) |
 | Rust + Embassy, `opt-level = "s"` | 35.2 KB | 2.5 KB (+ stack) |
 | Rust + Embassy, `opt-level = "z"` | 31.7 KB | 2.5 KB (+ stack) |
 

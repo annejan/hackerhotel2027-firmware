@@ -8,6 +8,7 @@
 #include "app.h"
 #include "bootloader.h"
 #include "frame.h"
+#include "proto.h"
 
 #define EXPORT __attribute__((visibility("default")))
 
@@ -61,4 +62,15 @@ EXPORT uint32_t emu_render(uint8_t held, uint8_t *out)
         *out++ = fb[RGB[i].b];
     }
     return 0;
+}
+
+EXPORT int emu_usb(const uint8_t *in, int len, uint8_t *out)
+{
+    int n = proto_handle(in, len, out);
+    name_t name;
+    if (app_saved_name(&name)) { /* SET NAME: "flash" it, like main.c */
+        flash_name = name;
+        has_flash_name = true;
+    }
+    return n;
 }

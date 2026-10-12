@@ -247,3 +247,37 @@ void app_render(uint8_t held)
     default: game_render(held); break;
     }
 }
+
+uint8_t app_items(void) { return ITEMS; }
+const char *app_label(uint8_t i) { return i < ITEMS ? LABELS[i] : ""; }
+uint8_t app_item(void) { return a.item; }
+uint8_t app_levels(void) { return sizeof LEVELS; }
+uint8_t app_level(void) { return a.level; }
+bool app_charging(void) { return a.charging; }
+void app_name(name_t *out) { *out = a.name; }
+
+bool app_set_item(uint8_t i)
+{
+    if (i >= ITEMS || i == EDIT_NAME || i == LIGHT)
+        return false;
+    a.menu = a.editing = a.show_charge = false;
+    select_item(i);
+    return true;
+}
+
+void app_set_level(uint8_t level)
+{
+    if (level < sizeof LEVELS)
+        a.level = level;
+}
+
+void app_set_name(const name_t *name)
+{
+    a.name = *name;
+    a.saved = *name;
+    a.has_saved = true;
+    if (a.editing) { /* the editor would hold an old copy */
+        a.editing = false;
+        select_item(NAME);
+    }
+}

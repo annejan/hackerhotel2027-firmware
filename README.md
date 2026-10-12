@@ -30,6 +30,25 @@ T3 next, hold T3 save). It is kept in flash. Until then the badge shows the
 build-time default: `BADGE_NAME="ANNE JAN" cargo build --release` (C:
 `make -C c NAME="ANNE JAN"`).
 
+## Setup page (WebUSB)
+
+The C firmware is a USB device with a small vendor protocol, and
+[`docs/webusb/index.html`](docs/webusb/index.html) is a page that talks to it
+from Chrome or Edge with WebUSB: set your name (saved in flash), pick what
+the badge shows, set the brightness. It also shows the badge's state as it
+changes. No driver install is needed on Linux and macOS; on Windows the
+badge says so itself (Microsoft OS 2.0 descriptor, WinUSB).
+
+Try it without a badge: `python3 tools/emu/emu.py c --web` serves the page
+on <http://localhost:8027/> and passes its packets to the emulated firmware,
+so the page, the protocol and the badge's reaction are tested together.
+
+The USB driver (`c/src/usb.c`) is ported from the ch32fun-based WebUSB test
+that the badge team ran on a CH32X035, where it enumerated and passed bulk
+data. The CH643's USB block has the same address and registers, but the
+port is **not tested on a CH643 yet**. The protocol is in `c/src/proto.h`.
+It uses the pid.codes test ID 1209:D035 for now; a real badge needs its own.
+
 ## Emulator
 
 Either firmware can be built as a shared library and played on the PC:
@@ -136,7 +155,7 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 
 | | |
 |---|---|
-| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator) |
+| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it |
 | `tools/fwsim` | `cargo test` checks the name editor. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random touches in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
 | `tools/sim/fwgif.py` | Turns a `fwsim record` into a GIF on the board render |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
@@ -148,12 +167,13 @@ The Python tools need numpy, scipy, Pillow and ffmpeg.
 ## Size
 
 Everything above (name tag and name entry, hotel screen, menu, 6
-animations, 6 games, the USB boot gesture), measured. The last 256 bytes of
+animations, 6 games, the USB boot gesture; in C also the USB device),
+measured. The last 256 bytes of
 flash are kept for the saved name.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **21.9 KB** (35%) | 4.7 KB + 2 KB stack |
+| C, GCC 15 `-Os`, with USB | **24.3 KB** (39%) | 5.0 KB + 2 KB stack |
 | Rust + Embassy, `opt-level = "z"` | 31.7 KB (51%) | 2.5 KB + stack |
 | Rust + Embassy, `opt-level = "s"` (default) | **35.2 KB** (57%) | 2.5 KB + stack |
 
@@ -162,7 +182,9 @@ tables 2.2 KB, Snake 1.8 KB (its demo path search included), menu 1.5 KB,
 Pong / Star Chase / game shell / name tag / Breakout about 1.1 to 1.3 KB
 each, Flappy 0.7 KB. The 5x7 font is 295 bytes.
 
-Rust is about 1.6 times the C size: about 3 KB of Embassy executor, timer
+USB in C is 2.3 KB: the driver about 1.25 KB, descriptors 0.3 KB (the
+Windows part 195 bytes), the protocol 0.4 KB, and 326 bytes of RAM. Without
+it, C is 21.9 KB, and Rust is about 1.6 times that: about 3 KB of Embassy executor, timer
 and HAL interrupt code, the rest is code generation. There is room left for
 more games either way.
 
@@ -204,6 +226,6 @@ more games either way.
   draw current. ch32-hal does not do this, so `main.rs` does it.
 - **No battery gauge.** The board has no battery-voltage sense, so the
   firmware can show *that* the battery charges but not *how full* it is.
-- **No USB driver yet.** ch32-hal has no USB driver for the CH643. The chip
-  has USB FS device and USB PD, so this would need a port, for example from
-  the CH32X035 USBFS driver.
+- **USB in Rust.** ch32-hal has no USB driver for the CH643, so only the C
+  firmware is a USB device so far (see Setup page). The Rust firmware would
+  need an embassy-usb driver for the CH643's USB block.

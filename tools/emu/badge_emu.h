@@ -33,3 +33,9 @@ void emu_event(uint8_t kind, uint8_t arg);
  * boot ROM (call emu_init to power on again). */
 uint32_t emu_render(uint8_t held, uint8_t *out);
 uint8_t emu_brightness(void);      /* 0..255, before gamma */
+
+/* Optional (C firmware only for now): one packet of the badge's USB
+ * protocol (c/src/proto.h), as if it came in over WebUSB. Fills out[64]
+ * with the reply and returns its length. emu.py --web uses it to let the
+ * browser page talk to the emulator. */
+int emu_usb(const uint8_t *in, int len, uint8_t *out);

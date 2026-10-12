@@ -56,5 +56,7 @@ void ledpwm_show(uint8_t brightness)
         }
     }
     for (int i = 0; i < SLOTS; i++)
-        dma_buf[i] = GAMMA[scale8(fb[i], brightness)];
+        /* gamma first, then brightness scales the PWM duty: scaling before
+         * gamma would round night mode down to all-off */
+        dma_buf[i] = scale8(GAMMA[fb[i]], brightness);
 }

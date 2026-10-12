@@ -56,9 +56,11 @@ The items, in order:
    animations.
 4. **SNAKE**, **STARTRIS**, **BREAKOUT**, **PONG**, **FLAPPY**,
    **STAR CHASE**: games.
-5. **LIGHT**: brightness. Tap T3 to step through five levels, from night
-   mode to full. A bar on the grid shows the level. The menu stays open,
-   so you can step again.
+5. **LIGHT**: brightness. Tap T3 to step through five levels: night,
+   5%, 12.5%, 31% and full LED power. A bar on the grid shows the level.
+   The menu stays open, so you can step again. The badge starts at 12.5%,
+   because bare LEDs at close range are bright. Full power is for
+   daylight, and it drains the battery fastest.
 
 ## Name tag, Hacker Hotel and the animations
 

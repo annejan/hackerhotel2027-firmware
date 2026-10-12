@@ -46,7 +46,7 @@ def find_pcb():
             return d / "hackerhotel2027.kicad_pcb"
     sys.exit(f"can't find {name}; clone it next to this repo or set HH27_HW")
 
-RENDER_PX = 1376
+RENDER_PX = 1376             # asked of kicad-cli; it may deliver a different size
 S = 480                      # board image size in the GIF
 CAP = 60                     # caption band
 FPS = 20
@@ -79,13 +79,12 @@ def refresh():
 class Layout:
     def __init__(self):
         d = json.loads(LED_JSON.read_text())
-        bx, by, bw, bh = d["bbox"]
-        a = np.asarray(Image.open(RENDER).convert("RGB")).astype(int)
-        board = np.abs(a[:, :, 2] - a[:, :, 0]) < 14      # background is tinted blue
-        ys, xs = np.nonzero(board)
-        k = (xs.max() - xs.min()) / bw                      # render px per mm
-        self.to_px = lambda x, y: ((xs.min() + (x - bx) * k) * S / RENDER_PX,
-                                   (ys.min() + (y - by) * k) * S / RENDER_PX)
+        k, ox, oy = self.calibrate(d)
+        # scale from the render's real size: kicad-cli can return a slightly
+        # different size than asked (1344 for 1376 here), which would pull
+        # every LED towards the top left
+        px = Image.open(RENDER).size[0]
+        self.to_px = lambda x, y: ((ox + x * k) * S / px, (oy + y * k) * S / px)
 
         mono = [l for l in d["leds"] if not l["rgb"]]
         rgb = [l for l in d["leds"] if l["rgb"]]
@@ -141,6 +140,37 @@ class Layout:
         self.mr, self.mth = polar(mx)
         self.rr, self.rth = polar(rx)
         self.nm, self.nr = len(mx), len(rx)
+
+    @staticmethod
+    def calibrate(d):
+        """Render px = offset + mm * k. A first guess comes from the board's
+        bounding box in the render (the background is tinted blue); it is
+        then fitted to the RGB LEDs, which show as bright white squares."""
+        bx, by, bw, bh = d["bbox"]
+        a = np.asarray(Image.open(RENDER).convert("RGB")).astype(int)
+        ys, xs = np.nonzero(np.abs(a[:, :, 2] - a[:, :, 0]) < 14)
+        k = (xs.max() - xs.min()) / bw
+        ox, oy = xs.min() - bx * k, ys.min() - by * k
+        gray = a.mean(2)
+        rgb = [(l["x"], l["y"]) for l in d["leds"] if l["rgb"]]
+        for _ in range(3):
+            mm, px = [], []
+            for x, y in rgb:
+                cx, cy = int(ox + x * k), int(oy + y * k)
+                win = gray[cy - 30:cy + 31, cx - 30:cx + 31]
+                wy, wx = np.nonzero(win > 245)
+                if len(wx) > 30:
+                    mm.append((x, y))
+                    px.append((cx - 30 + wx.mean(), cy - 30 + wy.mean()))
+            if len(mm) < 10:
+                break
+            mm, px = np.array(mm), np.array(px)
+            # least squares for one scale and two offsets
+            A = np.zeros((2 * len(mm), 3))
+            A[0::2, 0], A[0::2, 1] = mm[:, 0], 1
+            A[1::2, 0], A[1::2, 2] = mm[:, 1], 1
+            (k, ox, oy), *_ = np.linalg.lstsq(A, px.ravel(), rcond=None)
+        return k, ox, oy
 
     def grid_to_mono(self, img):
         """img: (GH, GW) intensities -> mono array (edge LEDs left at 0)."""

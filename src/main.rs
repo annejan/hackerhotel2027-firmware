@@ -109,7 +109,7 @@ async fn main(spawner: Spawner) -> ! {
                 for t in 0..anim::FPS {
                     frame.clear();
                     anim::usb_boot(&mut frame, t);
-                    display.show(&frame, app.brightness().max(64));
+                    display.show(&frame, app.brightness().max(32));
                     ticker.next().await;
                 }
                 bootloader::reboot_to_boot_rom();

@@ -50,8 +50,10 @@ const ITEMS: [(Item, &str); 15] = [
     (Item::Light, "LIGHT"),
 ];
 
-/// Brightness steps; index 0 is night mode.
-const LEVELS: [u8; 5] = [6, 24, 64, 140, 255];
+/// Brightness steps, as a share of full PWM duty (applied after gamma):
+/// night, 5%, 12.5% (the default), 31%, full. Bare LEDs at arm's length are
+/// bright, so the steps stay low.
+const LEVELS: [u8; 5] = [4, 12, 32, 80, 255];
 const MENU_TIMEOUT: u32 = 20 * FPS;
 
 pub struct App {

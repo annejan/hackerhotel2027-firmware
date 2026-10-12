@@ -38,8 +38,9 @@ static const char *const LABELS[ITEMS] = {
     "SNAKE", "STARTRIS", "BREAKOUT", "PONG", "FLAPPY", "STAR CHASE", "LIGHT",
 };
 
-/* brightness steps; index 0 is night mode */
-static const uint8_t LEVELS[5] = {6, 24, 64, 140, 255};
+/* brightness steps, as a share of full PWM duty (applied after gamma):
+ * night, 5%, 12.5% (the default), 31%, full */
+static const uint8_t LEVELS[5] = {4, 12, 32, 80, 255};
 #define MENU_TIMEOUT (20 * FPS)
 
 static struct {
@@ -137,7 +138,7 @@ uint8_t app_brightness(void)
 {
     uint8_t b = LEVELS[a.level];
     /* make sure the boot screen is visible even in night mode */
-    return a.boot_frames && b < 64 ? 64 : b;
+    return a.boot_frames && b < 32 ? 32 : b;
 }
 
 /* menu: the item's name on the grid, its place in the list on the outline,

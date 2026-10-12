@@ -117,7 +117,7 @@ impl LedPwm {
         Self { _private: () }
     }
 
-    /// Gamma-correct, scale by `brightness` and hand `frame` to the scanner.
+    /// Gamma-correct, scale the duty by `brightness` and hand `frame` to the scanner.
     pub fn show(&mut self, frame: &Frame, brightness: u8) {
         // GUESS: LED_IF_SET flags the end of a scan frame. Copying right after it
         // keeps a frame from tearing; give up after a while instead of hanging
@@ -130,7 +130,9 @@ impl LedPwm {
         }
         let buf = unsafe { &mut *addr_of_mut!(DMA_BUF) };
         for (dst, &v) in buf.iter_mut().zip(frame.px.iter()) {
-            *dst = GAMMA[scale(v, brightness) as usize];
+            // gamma first, then brightness scales the PWM duty: scaling before
+            // gamma would round night mode down to all-off
+            *dst = scale(GAMMA[v as usize], brightness);
         }
     }
 }

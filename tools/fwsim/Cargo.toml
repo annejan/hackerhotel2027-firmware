@@ -5,6 +5,9 @@ edition = "2021"
 description = "Runs the firmware's hardware-independent modules on the PC"
 publish = false
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [workspace]
 
 [profile.dev]

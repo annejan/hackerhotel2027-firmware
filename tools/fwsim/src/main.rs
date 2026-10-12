@@ -10,52 +10,10 @@
 //!       down0..3 / up0..3 (pad held), charge / nocharge.
 //!
 //! BADGE_NAME works as for the firmware build.
-#![allow(dead_code)]
-
-#[path = "../../../src/anim.rs"]
-mod anim;
-#[path = "../../../src/app.rs"]
-mod app;
-#[path = "../../../src/font.rs"]
-mod font;
-#[path = "../../../src/frame.rs"]
-mod frame;
-#[path = "../../../src/game.rs"]
-mod game;
-#[path = "../../../src/games/mod.rs"]
-mod games;
-#[path = "../../../src/generated.rs"]
-mod generated;
-#[path = "../../../src/nametag.rs"]
-mod nametag;
 
 use std::io::Write;
 
-use generated::{EDGE, GRID, GRID_H, GRID_W, NONE, RGB};
-
-/// Same as the firmware's main.rs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Event {
-    Press(u8),
-    Tap(u8),
-    Hold(u8),
-    Charging(bool),
-    Bootloader,
-}
-
-/// One frame as the renderer wants it: grid rows, outline, RGB by (arm, rank).
-fn dump(f: &frame::Frame, out: &mut Vec<u8>) {
-    for r in 0..GRID_H {
-        for c in 0..GRID_W {
-            let s = GRID[r][c];
-            out.push(if s == NONE { 0 } else { f.px[s as usize] });
-        }
-    }
-    out.extend(EDGE.iter().map(|&s| f.px[s as usize]));
-    for l in RGB.iter() {
-        out.extend([f.px[l.r as usize], f.px[l.g as usize], f.px[l.b as usize]]);
-    }
-}
+use fwsim::{app, dump, frame, Event, FRAME_BYTES};
 
 fn soak(frames: u32) {
     let mut a = app::App::new();
@@ -143,7 +101,9 @@ fn record(path: &str, frames: u32, script: &[String]) {
         }
         f.clear();
         a.render(&mut f, held);
-        dump(&f, &mut out);
+        let mut buf = [0u8; FRAME_BYTES];
+        dump(&f, &mut buf);
+        out.extend_from_slice(&buf);
         out.push(held | pressed << 4); // pads lit in the caption
         out.push(a.brightness());
     }

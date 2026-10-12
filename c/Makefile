@@ -3,6 +3,7 @@
 #   make            build build/hh27.elf / .bin (fetches the WCH SDK on first run)
 #   make size       section sizes
 #   make flash      flash over USB with wchisp (boot ROM, see ../README.md)
+#   make emu        build/libhh27.so for the PC emulator (tools/emu)
 #
 # Uses only startup, linker script, clock init and register headers from
 # WCH's SDK (github.com/openwch/ch643); no peripheral library, no libc.
@@ -71,4 +72,16 @@ flash: build/hh27.bin
 clean:
 	rm -rf build
 
-.PHONY: all size flash clean
+# The hardware-independent part as a shared library for the emulator,
+# built with the host compiler (see ../tools/emu/badge_emu.h).
+HOSTCC   ?= cc
+EMU_SRCS := src/app.c src/anim.c src/frame.c src/generated.c src/game.c \
+            $(wildcard src/games/*.c) src/nametag.c emu/emu.c
+
+emu: build/libhh27.so
+
+build/libhh27.so: $(EMU_SRCS) $(wildcard src/*.h) ../tools/emu/badge_emu.h | build
+	$(HOSTCC) -std=gnu11 -O2 -g -Wall -Wextra -fPIC -shared -fvisibility=hidden -Isrc \
+	    $(if $(NAME),-DBADGE_NAME='"$(NAME)"') $(EMU_SRCS) -o $@
+
+.PHONY: all size flash clean emu

@@ -43,6 +43,23 @@ work" below).
 The name is set at build time: `BADGE_NAME="ANNE JAN" cargo build --release`
 (C: `make NAME="ANNE JAN"`). Letters, digits and ` !'*-.:?/#@`.
 
+## Emulator
+
+Play with the badge on the PC. Either firmware is built as a shared library
+(the app, menu, games and animations; interface in `tools/emu/badge_emu.h`)
+and `tools/emu/emu.py` draws it live on the board render:
+
+```sh
+make -C c emu && python3 tools/emu/emu.py c                     # C firmware
+(cd tools/fwsim && cargo build --release) && python3 tools/emu/emu.py rust
+```
+
+Keys `1` `2` `3` `4` or `←` `↓` `↑` `→` are the pads T1–T4 (or click them),
+`C` toggles USB power, `R` resets. Touches go through the same press / tap /
+hold / chord rules as `touch.rs`, so holding T3 opens the menu and holding
+T1 + T4 for 3 s reboots into the boot ROM. Needs Python with tkinter,
+numpy, scipy and Pillow.
+
 ## Hardware
 
 | | |
@@ -135,7 +152,8 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 
 | | |
 |---|---|
-| `tools/fwsim` | Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random touches in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
+| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator) |
+| `tools/fwsim` | Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random touches in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
 | `tools/sim/fwgif.py` | Turns a `fwsim record` into a GIF on the board render |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
 | `tools/sim/games.py` | The first game mock-ups, played by a scripted AI |

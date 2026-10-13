@@ -10,7 +10,7 @@ cut and sized. Needs Inkscape, and scipy for the outline letters.
 | `badgeteam.svg` | the logo on <https://badge.team/> |
 | `nicolai.svg` | the logo on <https://nicolaielectronics.nl/> |
 | `allnet.svg` | <https://commons.wikimedia.org/wiki/File:ALLNET_Logo.svg> (public domain, trademarked) |
-| `defeest.svg` | supplied by the badge team |
+| `defeest.svg` | the logo of <https://defeest.nl/> |
 
 Saved as plain SVG (Inkscape `--export-plain-svg`, editor metadata
 dropped); the drawings are unchanged. The logos are trademarks of their

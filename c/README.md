@@ -32,12 +32,12 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 Same features in both (the bring-up test is 2.8 KB in C, plus 0.75 KB for
 the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
-2.2 KB with its five logos, the challenges 6.5 KB with their four games).
+2.2 KB with its five logos, the challenges 7.6 KB with their four games and the dance).
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel and the challenges | 42.6 KB | 6.6 KB (+ 2 KB stack) |
-| Rust + Embassy, `opt-level = "z"` (the default) | 57.2 KB | 4.7 KB (+ stack) |
+| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel and the challenges | 43.6 KB | 6.6 KB (+ 2 KB stack) |
+| Rust + Embassy, `opt-level = "z"` (the default) | 58.4 KB | 4.7 KB (+ stack) |
 | Rust + Embassy, `opt-level = "s"` | does not fit | |
 
 About 3 KB of the difference is the Embassy executor, time driver and HAL
@@ -55,11 +55,11 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | app (menu, greeting, first boot) | 4403 | 124 |
 | anim (7 animations) | 3960 | 442 |
 | generated (LED tables, slot designators) | 3014 | 0 |
+| challenge (levels, progress, victory dance) | 2972 | 31 |
 | selftest (bring-up test) | 2834 | 44 |
 | games/startris | 2556 | 0 |
 | factory (factory test) | 2440 | 37 |
 | sponsors (sponsor reel, logos) | 2173 | 12 |
-| challenge (levels, progress, victory dance) | 1794 | 23 |
 | games/snake | 1788 | 688 |
 | games/maze | 1770 | 0 |
 | usb (driver, descriptors) | 1737 | 326 |

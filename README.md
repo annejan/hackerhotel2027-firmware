@@ -226,14 +226,14 @@ and the first-boot stage.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **42.6 KB** (69%) | 6.6 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` (default) | **57.2 KB** (93%) | 4.7 KB + stack |
+| C, GCC 15 `-Os` | **43.6 KB** (71%) | 6.6 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` (default) | **58.4 KB** (95%) | 4.7 KB + stack |
 | Rust + Embassy, `opt-level = "s"` | does not fit (2 KB over) | |
 
-**Rust is nearly full**: 4.6 KB left, and only with `opt-level = "z"`.
+**Rust is nearly full**: 3.4 KB left, and only with `opt-level = "z"`.
 The challenges (four games, the progress and the victory dance) cost
-6.5 KB in C (the maze and the dance with its fireworks 1.8 KB each) and
-7.5 KB in Rust. The factory test and the sponsor reel cost 4.9 KB in C
+7.6 KB in C (the dance with its stick figure and fireworks 2.9 KB, the
+maze 1.8 KB) and 8.8 KB in Rust. The factory test and the sponsor reel cost 4.9 KB in C
 (the test 2.4 KB, a third of it the volunteers' hints in the log; the reel
 2.2 KB, of which the five greyscale logos are 0.94 KB) and 5.3 KB in
 Rust.
@@ -250,7 +250,7 @@ Infrared and the UART console add 4.2 KB (IR driver 1.1 KB, pulse codec
 0.7 KB, UART 0.5 KB, console 1.0 KB, the greeting in the app about 1 KB)
 and 0.85 KB of RAM, mostly the UART's 512-byte send buffer. Without
 USB, IR and UART, C is about 22 KB, and Rust is about 1.6 times that: about 3 KB of Embassy executor, timer
-and HAL interrupt code, the rest is code generation. C has 19 KB left
+and HAL interrupt code, the rest is code generation. C has 18 KB left
 for more; Rust would need something taken out first.
 
 ## What is solid and what is guessed

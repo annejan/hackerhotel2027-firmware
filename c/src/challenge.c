@@ -89,20 +89,66 @@ void challenge_arms(uint32_t t, int fresh)
     }
 }
 
-/* ---- the victory dance ---- */
+/* ---- the victory dance ----
+ *
+ * A stick figure dances on the grid, a new pose on every beat, dipping a
+ * row at the start of each; the arms flash disco colours on the beat and
+ * the outline chases. Between dances the text goes by a phrase at a time,
+ * with fireworks on the arms and the outline. */
 
-static const char TEXT[] = "I'VE COMPLETED ALL THE CHALLENGES AND ALL I'VE GOT IS THIS LOUSY LED ANIMATION!";
-#define SPEED 20  /* columns a second */
+static const char *const PHRASE[] = {
+    "I'VE COMPLETED", "ALL THE CHALLENGES", "AND ALL I'VE GOT", "IS THIS LOUSY", "LED ANIMATION!",
+};
+#define PHRASES (int)(sizeof PHRASE / sizeof PHRASE[0])
+#define SPEED 24     /* text columns a second */
+#define BEAT 12      /* frames a beat: 150 bpm */
+#define DANCE_BEATS 8
 #define ROCKETS 3
-#define RISE 10   /* frames up the arm */
-#define BURST 26  /* frames of the burst */
+#define RISE 10      /* frames up the arm */
+#define BURST 26     /* frames of the burst */
+
+/* A pose: (row, column) of the neck, hip, left elbow and hand, right elbow
+ * and hand, left knee and foot, right knee and foot ("left" as you look
+ * at it). The head is a ring two rows above the neck. */
+typedef struct {
+    int8_t p[10][2];
+} pose_t;
+
+#define STAND {11, 7}, {14, 6}, {11, 9}, {14, 10}
+static const pose_t POSES[] = {
+    /* 0 arms up (and Y) */ {{{4, 8}, {9, 8}, {3, 6}, {1, 4}, {3, 10}, {1, 12}, STAND}},
+    /* 1 arms down */ {{{4, 8}, {9, 8}, {6, 6}, {9, 5}, {6, 10}, {9, 11}, STAND}},
+    /* 2 point up right, left hand on the hip */
+    {{{4, 8}, {9, 8}, {6, 5}, {8, 7}, {3, 11}, {1, 13}, {11, 7}, {14, 5}, {11, 9}, {14, 10}}},
+    /* 3 point up left, right hand on the hip */
+    {{{4, 8}, {9, 8}, {3, 5}, {1, 3}, {6, 11}, {8, 9}, {11, 7}, {14, 6}, {11, 9}, {14, 11}}},
+    /* 4 arms out */ {{{4, 8}, {9, 8}, {5, 5}, {4, 2}, {5, 11}, {4, 14}, STAND}},
+    /* 5 squat, arms forward */
+    {{{5, 8}, {10, 8}, {6, 5}, {5, 3}, {6, 11}, {5, 13}, {11, 5}, {14, 5}, {11, 11}, {14, 11}}},
+    /* 6 jump: arms up, knees tucked */
+    {{{3, 8}, {8, 8}, {2, 6}, {0, 7}, {2, 10}, {0, 9}, {10, 6}, {12, 7}, {10, 10}, {12, 9}}},
+    /* 7 M: hands on the head */ {{{4, 8}, {9, 8}, {3, 5}, {1, 6}, {3, 11}, {1, 10}, STAND}},
+    /* 8 C: both arms curved to the left */
+    {{{4, 8}, {9, 8}, {3, 6}, {2, 4}, {6, 7}, {7, 4}, STAND}},
+    /* 9 A: hands meet above the head */ {{{4, 8}, {9, 8}, {2, 6}, {0, 7}, {2, 10}, {0, 9}, STAND}},
+    /* 10 kick right */
+    {{{4, 8}, {9, 8}, {5, 5}, {3, 3}, {6, 10}, {8, 11}, {11, 8}, {14, 7}, {10, 10}, {9, 13}}},
+    /* 11 kick left */
+    {{{4, 8}, {9, 8}, {6, 6}, {8, 5}, {5, 11}, {3, 13}, {10, 6}, {9, 3}, {11, 8}, {14, 9}}},
+};
+
+/* the moves, a pose a beat, round and round */
+static const uint8_t STEPS[] = {0, 1, 0, 1, 2, 3, 2, 3, 4, 5, 4, 6, 0, 7, 8, 9, 10, 11, 10, 11, 5, 6, 4, 1};
+#define STEPS_N (int)(sizeof STEPS)
 
 typedef struct {
     uint8_t arm, hue, t; /* t = 0: free */
 } rocket_t;
 
 static struct {
-    uint32_t t;
+    uint32_t t;      /* frames into this part */
+    int part;        /* even: a dance, odd: a phrase; the last dance ends it */
+    uint32_t beat;   /* beats danced, over all the dances */
     rocket_t rocket[ROCKETS];
 } v;
 
@@ -156,20 +202,84 @@ static void fireworks(void)
     }
 }
 
+static void line(int r0, int c0, int r1, int c1)
+{
+    int dr = absi(r1 - r0), dc = absi(c1 - c0), sr = r0 < r1 ? 1 : -1, sc = c0 < c1 ? 1 : -1;
+    int err = dc - dr;
+    for (;;) {
+        fb_grid(r0, c0, 255);
+        if (r0 == r1 && c0 == c1)
+            return;
+        int e2 = 2 * err;
+        if (e2 > -dr) {
+            err -= dr;
+            c0 += sc;
+        }
+        if (e2 < dc) {
+            err += dc;
+            r0 += sr;
+        }
+    }
+}
+
+static void dancer(const pose_t *p, int dy)
+{
+    const int8_t(*q)[2] = p->p;
+#define AT(k) q[k][0] + dy, q[k][1]
+    line(AT(0), AT(1));                 /* body */
+    line(AT(0), AT(2)), line(AT(2), AT(3)); /* arms */
+    line(AT(0), AT(4)), line(AT(4), AT(5));
+    line(AT(1), AT(6)), line(AT(6), AT(7)); /* legs */
+    line(AT(1), AT(8)), line(AT(8), AT(9));
+#undef AT
+    int hr = q[0][0] + dy - 2, hc = q[0][1]; /* the head: a ring */
+    for (int dr = -1; dr <= 1; dr++)
+        for (int dc = -1; dc <= 1; dc++)
+            if (dr || dc)
+                fb_grid(hr + dr, hc + dc, 255);
+}
+
+static void dance(uint32_t t)
+{
+    uint32_t in_beat = t % BEAT, beat = v.beat + t / BEAT;
+    uint8_t pose = STEPS[beat % STEPS_N];
+    /* dip at the start of a beat; the jump goes up instead */
+    dancer(&POSES[pose], pose == 6 ? (in_beat < BEAT / 2 ? -1 : 0) : in_beat < 3);
+    /* disco: the arms flash a new colour every beat, the outline chases */
+    uint8_t flash = (uint8_t)(255 - in_beat * 160 / BEAT);
+    for (int i = 0; i < RGB_LEDS; i++)
+        fb_rgb(i, hsv((uint8_t)(beat * 47 + RGB[i].arm * 20), 255, flash));
+    for (int j = 0; j < EDGE_LEDS; j++)
+        fb[EDGE[j]] = (uint8_t)((j + beat) % 2 ? 140 : 8);
+}
+
 bool victory_render(void)
 {
     uint32_t t = v.t++;
-    int len = (int)sizeof TEXT - 1;
+    if (v.part % 2 == 0) { /* dancing */
+        dance(t);
+        if (t + 1 >= DANCE_BEATS * BEAT) {
+            v.beat += DANCE_BEATS;
+            v.part++;
+            v.t = 0;
+        }
+        return v.part <= 2 * PHRASES;
+    }
+    /* a phrase goes by; its letters bob, a little after each other */
+    const char *s = PHRASE[v.part / 2];
+    int len = (int)strlen(s);
     int x0 = GRID_W - (int)(t * SPEED / FPS);
-    /* the letters dance: each bobs up and down, a little after the one before */
     for (int i = 0; i < len; i++) {
         int x = x0 + i * (FONT_W + 1);
-        if (x <= -FONT_W || x >= GRID_W || TEXT[i] == ' ')
+        if (x <= -FONT_W || x >= GRID_W || s[i] == ' ')
             continue;
-        char ch[2] = {TEXT[i], 0};
-        int bob = (sin8((uint8_t)(t * 12 - i * 40)) - 128) * 2 / 128;
-        draw_text(ch, x, 4 + bob, 255);
+        char ch[2] = {s[i], 0};
+        draw_text(ch, x, 4 + (sin8((uint8_t)(t * 12 - i * 40)) - 128) * 2 / 128, 255);
     }
     fireworks();
-    return x0 + len * (FONT_W + 1) > 0;
+    if (x0 + len * (FONT_W + 1) <= 0) {
+        v.part++;
+        v.t = 0;
+    }
+    return true;
 }

@@ -38,7 +38,8 @@ void challenge_victory_done(void);
 /* the progress on the arms; `fresh` (an arm, or -1) blinks its newest level */
 void challenge_arms(uint32_t t, int fresh);
 
-/* the victory dance: the text, dancing, with fireworks on the arms and
- * the outline. Returns false at the end of the text. */
+/* the victory dance: a stick figure dancing on the grid, with disco
+ * colours on the arms, and between dances the text a phrase at a time,
+ * with fireworks. Returns false when it is over. */
 void victory_start(void);
 bool victory_render(void);

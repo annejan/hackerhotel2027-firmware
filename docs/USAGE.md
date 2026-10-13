@@ -145,10 +145,13 @@ beside its line shimmer. Progress is kept in flash, next to the name, so
 it survives power off and firmware updates (`wchisp erase` clears it).
 `progress` on the UART console lists it.
 
-All 25 levels, and the badge does its **victory dance**: "I'VE COMPLETED
-ALL THE CHALLENGES AND ALL I'VE GOT IS THIS LOUSY LED ANIMATION!" dances
-across the grid while fireworks go off on the arms and the outline. Tap
-to stop it. VICTORY in the menu plays it again, over and over.
+All 25 levels, and the badge does its **victory dance**: a stick figure
+dances on the grid, a new move on every beat (arms up and down, disco
+points, squats, jumps, kicks, and of course Y M C A), while the arms flash
+disco colours on the beat. Between the dances, "I'VE COMPLETED / ALL THE
+CHALLENGES / AND ALL I'VE GOT / IS THIS LOUSY / LED ANIMATION!" bobs by a
+phrase at a time, with fireworks on the arms and the outline. Tap to stop
+it. VICTORY in the menu plays it again, over and over.
 
 ![victory dance](fw/victory.gif)
 

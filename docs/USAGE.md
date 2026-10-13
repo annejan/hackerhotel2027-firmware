@@ -241,25 +241,32 @@ power-on.
 
 The first power-on after the factory test passed (in practice: when the
 attendee first switches it on) plays a short sponsor reel once: "THANKS
-TO", then each sponsor's logo, if there is one, and name. Any tap skips it.
+TO", then each sponsor's logo scrolling by in greyscale, with the arms in
+the sponsor's colours, and the name where the logo does not say it. Any
+tap skips it.
 After that it never plays by itself again; `sponsors` on the UART console
 plays it on demand.
 
 ![sponsor reel](fw/sponsors.gif)
 
 The sponsors are a table at the top of `c/src/sponsors.c` and
-`src/sponsors.rs` (for now: ALLNET.CHINA, BADGE.TEAM and NICOLAI
-ELECTRONICS, names only). To add a logo, make a small picture, preferably
-something designed for 16 x 17 pixels, and convert it:
+`src/sponsors.rs`: for now ALLNET (its word mark, then "ALLNET.CHINA"),
+badge.team and Nicolai Electronics (logo only; the logo says the name).
+Each entry has an optional logo, an optional text and two arm colours.
+
+The logos come from the SVGs in `assets/sponsors`. To add or change one,
+put the SVG (or a PNG) there, add a line to the `LOGOS` table in
+`tools/sim/logo.py` (how many grid rows it gets, an optional crop) and run:
 
 ```sh
-python3 tools/sim/logo.py logo.png      # prints a preview, and the rows for C and Rust
+python3 tools/sim/logo.py --preview=logos.png   # writes c/src/logos.h and src/logos.rs
 ```
 
-Paste the rows into both files and point the sponsor's entry at them. The
-grid is an octagon: the preview marks pixels that fall in the cut-off
-corners, where there are no LEDs. Logos show for 2.5 s, fading in, before
-the name scrolls by.
+A logo pixel's brightness is how much of it the picture covers, in four
+steps; lone specks are dropped. A logo up to 17 columns wide stands in
+the middle for 2.5 s, fading in; a wider one scrolls by like text. Word
+marks work best at 9 to 11 rows; thin lines and small text get lost. Each
+column costs 4 bytes of flash.
 
 ## Bring-up test (first boards)
 

@@ -30,13 +30,13 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 Same features in both (the bring-up test is 2.8 KB in C, plus 0.75 KB for
 the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
-0.65 KB).
+1.8 KB with its three logos).
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests and the sponsor reel | 34.6 KB | 6.5 KB (+ 2 KB stack) |
-| Rust + Embassy, `opt-level = "z"` (the default) | 48.2 KB | 4.7 KB (+ stack) |
-| Rust + Embassy, `opt-level = "s"` | 53.2 KB | 4.7 KB (+ stack) |
+| C, with USB, IR, the UART console, the bring-up and factory tests and the sponsor reel | 35.7 KB | 6.5 KB (+ 2 KB stack) |
+| Rust + Embassy, `opt-level = "z"` (the default) | 49.2 KB | 4.7 KB (+ stack) |
+| Rust + Embassy, `opt-level = "s"` | 54.5 KB | 4.7 KB (+ stack) |
 
 About 3 KB of the difference is the Embassy executor, time driver and HAL
 interrupt handlers, which the super-loop does not need. The rest is code
@@ -56,6 +56,7 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | selftest (bring-up test) | 2834 | 44 |
 | games/startris | 2556 | 0 |
 | factory (factory test) | 2440 | 37 |
+| sponsors (sponsor reel, logos) | 1803 | 16 |
 | games/snake | 1788 | 688 |
 | usb (driver, descriptors) | 1737 | 326 |
 | games/pong | 1290 | 0 |
@@ -70,7 +71,6 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | games/flappy | 718 | 0 |
 | irproto (packets, pulse decoder) | 698 | 0 |
 | store (name and stage in flash) | 664 | 0 |
-| sponsors (sponsor reel) | 656 | 16 |
 | main | 631 | 0 |
 | buttons | 574 | 25 |
 | proto (USB commands) | 530 | 0 |

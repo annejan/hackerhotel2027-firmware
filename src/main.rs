@@ -42,6 +42,7 @@ mod game;
 mod games;
 mod generated;
 mod ledpwm;
+mod logos;
 mod nametag;
 mod proto;
 mod sponsors;

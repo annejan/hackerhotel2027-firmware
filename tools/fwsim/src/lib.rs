@@ -31,6 +31,8 @@ pub mod game;
 pub mod games;
 #[path = "../../../src/generated.rs"]
 pub mod generated;
+#[path = "../../../src/logos.rs"]
+pub mod logos;
 #[path = "../../../src/nametag.rs"]
 pub mod nametag;
 #[path = "../../../src/proto.rs"]

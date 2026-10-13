@@ -192,7 +192,7 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `uart.rs`, `console.rs`, `log.rs` | UART header: the log out, console commands in |
 | `selftest.rs` | Bring-up test for new boards |
 | `factory.rs` | Factory test for the flashing table (first power-on until it passes) |
-| `sponsors.rs` | Sponsor reel (the power-on after the factory test), with the sponsor table |
+| `sponsors.rs`, `logos.rs` | Sponsor reel (the power-on after the factory test), with the sponsor table; the logos (generated) |
 
 `c/` has a port of the same firmware to plain C (register level, no WCH
 peripheral library), for comparison; see `c/README.md` and the sizes below.
@@ -203,7 +203,7 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 |---|---|
 | `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it; `--fresh` starts as a freshly flashed badge (factory test, then sponsor reel); emulators share infrared, stdin is the UART console |
 | `tools/fwsim` | `cargo test` checks the name editor. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random presses in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
-| `tools/sim/logo.py` | Turns a picture into a sponsor logo for the grid (rows for `sponsors.c` / `sponsors.rs`) |
+| `tools/sim/logo.py` | Sponsor logos: `assets/sponsors/*.svg` to greyscale bitmaps for the grid (`c/src/logos.h`, `src/logos.rs`); needs Inkscape |
 | `tools/sim/fwgif.py` | Turns a `fwsim record` (or frames from the C emulator library) into a GIF on the board render |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
 | `tools/sim/games.py` | The first game mock-ups, played by a scripted AI |
@@ -221,14 +221,15 @@ saved name and the first-boot stage.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **34.6 KB** (56%) | 6.5 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` (default) | **48.2 KB** (78%) | 4.7 KB + stack |
-| Rust + Embassy, `opt-level = "s"` | 53.2 KB (86%) | 4.7 KB + stack |
+| C, GCC 15 `-Os` | **35.7 KB** (58%) | 6.5 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` (default) | **49.2 KB** (80%) | 4.7 KB + stack |
+| Rust + Embassy, `opt-level = "s"` | 54.5 KB (88%) | 4.7 KB + stack |
 
 Rust builds with `opt-level = "z"` since the factory test: with `"s"` it
-would be at 86%. The factory test and the sponsor reel cost 3.3 KB in C
+would be at 88%. The factory test and the sponsor reel cost 4.5 KB in C
 (the test 2.4 KB, a third of it the volunteers' hints in the log; the reel
-0.65 KB without logos) and 3.9 KB in Rust. A logo is 64 bytes.
+1.8 KB, of which the three greyscale logos are 0.75 KB, 4 bytes a column)
+and 5 KB in Rust.
 
 Roughly where the C flash goes: animations 4.0 KB, the app (menu, USB
 settings, infrared greeting) 3.4 KB, Startris 2.5 KB, LED tables 2.2 KB,

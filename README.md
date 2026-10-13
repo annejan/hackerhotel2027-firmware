@@ -69,15 +69,16 @@ It uses the pid.codes test ID 1209:D035 for now; a real badge needs its own.
 that receives it shows "HI" and your name, and answers with its own name,
 which yours then shows: one press, and both know who they met. The format
 is NEC-style pulse-distance coding on 38 kHz, with a type, a length and a
-CRC (`c/src/irproto.h`, `src/irproto.rs`). TIM1 CH4 makes the carrier on
-PB23 in both. In C the SysTick compare interrupt switches it at each mark
-and space and the receiver's edges come in on EXTI (`c/src/ir.c`); in
-Rust, where Embassy owns SysTick, TIM3 times the marks and spaces and TIM2
-CH4 captures the receiver's edges (`src/ir.rs`). The C driver is tested on
-the PC against a fake SysTick and GPIO (waveform out decodes, distorted
-edges in decode, own echo ignored); neither is tested on a badge. C and
-Rust badges swap names with each other (checked in the emulator). Note the hardware issue below: the IR
-receiver has no supply on the current board.
+CRC (`c/src/irproto.h`, `src/irproto.rs`). TIM2 CH1 makes the carrier on
+PB21, the LED's cathode, in both (low = LED on). In C the SysTick compare
+interrupt switches it at each mark and space and the receiver's edges
+come in on EXTI (`c/src/ir.c`); in Rust, where Embassy owns SysTick and
+ch32-hal the EXTI interrupts, TIM3 times the marks and spaces and TIM1
+samples the receiver every 50 us (`src/ir.rs`). The C driver is tested on
+the PC against a fake SysTick, TIM2 and GPIO (waveform out decodes,
+distorted edges in decode, own echo ignored), the Rust sampler with a
+distorted packet at every sampling phase; neither is tested on a badge.
+C and Rust badges swap names with each other (checked in the emulator).
 
 **UART console.** The UART header J3 (115200 8N1) prints a log (boot,
 names saved, IR packets) and takes commands: `help`, `info`,
@@ -111,8 +112,8 @@ board where they are; see
 | Buttons | ◀ SW3 PC5, B SW1 PB20, A SW2 PC4, ▶ SW4 PB18; active low, 10k pull-ups on the board |
 | Power | LiPo (JST J2) with XT4054 charger and power path; CHRG on PB22; VBUS sense on PC3 |
 | Debug | SWD header J4: 1 SWIO (PC18), 2 SWCK (PC19), 3 VCC, 4 GND |
-| UART | header J3: 1 RX (PB17), 2 TX (PB16), 3 VCC, 4 GND; USART3. Log and console in C |
-| IR | receiver CGQ1 (38 kHz) on PB19; IR LED D316, anode PB23 through 47 Ω, cathode PB21. Name swap in C |
+| UART | header J3: 1 RX (PB17), 2 TX (PB16), 3 VCC, 4 GND; USART3. Log and console |
+| IR | receiver CGQ1 (38 kHz, on VCC) on PB19; IR LED D316, anode on VCC through R37 (200 Ω, about 15 mA), cathode PB21 (low = on). Name swap |
 
 ## Build
 
@@ -269,8 +270,11 @@ for more; Rust would need something taken out first.
   the driver DMA-loads the next row (8 words: intensity, PA k, PA k+8,
   PA k+16) and selects the next COM. The brightness is the intensity PWM.
 - **Remaps** (RM 8.3.2.1): USART3_RM = 11 puts TX/RX on PB16/PB17, and
-  TIM1_RM = 1xx puts CH4 on PB23, which now makes the IR carrier.
-  (ch32-data's CH643 tables stop at USART3 remap 2 and TIM1 remap 3.)
+  TIM2_RM = 001 puts CH1 on PB21, which makes the IR carrier (its CH2..CH4
+  land on LED matrix pins then, so they stay off). PB19, the receiver, has
+  only TIM2 CH4 (TIM2_RM = 100) as a timer input, so it is read by EXTI
+  (C) or sampled (Rust). (ch32-data's CH643 tables stop at USART3 remap 2
+  and TIM1 remap 3.)
 - **SysTick** (QingKe V4 manual, chapter 5): with STRE = 0 the counter runs
   on past the compare value and sets CNTIF there, as `ir.c` uses it.
 
@@ -286,19 +290,19 @@ for more; Rust would need something taken out first.
 - **Unbonded and unused pads.** WCH's SystemInit pulls up the pads that the
   LQFP64 package does not bond out (PC6–PC9, PC12, PC13, PC20); if they
   float they draw current. ch32-hal does not do this, so `main.rs` does it,
-  and pulls up PC0–PC2 too, which the board leaves unconnected since the
-  touch pads went. PC3 (VBUS sense) must stay a floating input.
-- **IR receiver has no supply** (hardware commit c388024). Its VCC (through
-  R36) and the IR_RECV pull-up R35 are on a `+3.3V` net that nothing
-  drives: there is no regulator. Probably meant to be VCC.
+  and pulls up PC0–PC2, PC14 and PC15 too, which the board leaves
+  unconnected (the touch pads and the CC jumpers went), and PB23 (no
+  longer the IR LED). PC3 (VBUS sense) must stay a floating input.
+- **IR receiver supply: fixed** in hardware commit 0986add. Its VCC
+  (through R36) and the IR_RECV pull-up R35 were on a `+3.3V` net that
+  nothing drove; they are on VCC now.
 - **VBUS straight into PC3.** VCC is VBUS minus a Schottky drop, so PC3
   sits a little above VDD while USB is in; the datasheet allows at most
   VDD + 0.3 V on an I/O pin (CH643DS0 3.2). A divider would be safer.
-- **IR LED current.** The anode hangs off PB23 through 47 Ω. The datasheet
-  allows a PB pin to source at most 30 mA (absolute maximum), and only
-  12 mA at VDD − 0.4 V; PB pins are made to sink (100 mA). Better: anode
-  to VCC through the resistor, cathode on PB21, carrier from TIM2 CH1
-  (TIM2_RM = 001 puts CH1 on PB21).
+- **IR LED current: fixed** in hardware commit 0986add. The anode hung
+  off PB23 through 47 Ω, more than a PB pin may source (30 mA absolute
+  maximum). Now the anode is on VCC through R37 (200 Ω, about 15 mA) and
+  PB21 sinks the cathode, with the carrier from TIM2 CH1.
 - **Wiring order is not the order you see.** Grid column 7 (D143) goes
   through R10 to PA9, columns 8 and 9 (D141, D142) through R8 and R9 to
   PA7 and PA8; grid row 7 is on PB15, after row 15 on PB0. Harmless: the

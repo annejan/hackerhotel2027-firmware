@@ -9,7 +9,7 @@
 //!       -  35 RGB LEDs, 7 per arm (one PWM channel, three COMs each)
 //!   * four push buttons ◀ B A ▶ (PC5, PB20, PC4, PB18, active low; see buttons.rs)
 //!   * LiPo charger XT4054, CHRG status on PB22; VBUS sense on PC3
-//!   * IR receiver (PB19) and IR LED (PB23 anode, PB21 cathode): ir.rs
+//!   * IR receiver (PB19) and IR LED (anode on VCC, PB21 cathode, low = on): ir.rs
 //!   * UART header (USART3: PB16 TX, PB17 RX): uart.rs; SWD header (PC18 SWIO, PC19 SWCK)
 //!
 //! Tasks:
@@ -158,17 +158,18 @@ async fn charge_monitor(chrg: Input<'static>) {
 /// Pads that exist on the die but are not bonded out in the LQFP64 package
 /// float and draw current unless pulled up. WCH's own SystemInit does this
 /// (GPIO_IPD_Unused); ch32-hal does not. CH643Q: PC6..PC9, PC12, PC13, PC20.
-/// PC0..PC2 are bonded but not connected on this board, so pull those up
-/// too. PC3 (VBUS sense, 100k to GND) must stay a floating input.
+/// PC0..PC2, PC14 and PC15 are bonded but not connected on this board (the
+/// CC jumpers went in hardware commit 0986add), so pull those up too. PC3
+/// (VBUS sense, 100k to GND) must stay a floating input.
 fn pull_up_unused_pads() {
     use hal::pac::{GPIOC, RCC};
     RCC.apb2pcenr().modify(|w| w.set_iopcen(true));
     // input with pull-up = mode nibble 0b1000, pull selected by OUTDR = 1
     GPIOC.cfglr().modify(|w| w.0 = (w.0 & 0x00FF_F000) | 0x8800_0888); // PC0..PC2, PC6, PC7
     // CFGHR is not readable on early silicon (WCH keeps a shadow copy), so
-    // write it whole: PC8, PC9, PC12, PC13 pull-up, the rest floating input
-    GPIOC.cfghr().write(|w| w.0 = 0x4488_4488);
-    GPIOC.bshr().write(|w| w.0 = 0b111 | 1 << 6 | 1 << 7 | 1 << 8 | 1 << 9 | 1 << 12 | 1 << 13);
+    // write it whole: PC8, PC9, PC12..PC15 pull-up, the rest floating input
+    GPIOC.cfghr().write(|w| w.0 = 0x8888_4488);
+    GPIOC.bshr().write(|w| w.0 = 0b111 | 1 << 6 | 1 << 7 | 1 << 8 | 1 << 9 | 0xF << 12);
     GPIOC.cfgxr().modify(|w| w.0 = (w.0 & !(0xF << 16)) | 0x8 << 16); // PC20
     GPIOC.bsxr().write(|w| w.0 = 1 << 4);
 }

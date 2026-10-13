@@ -149,3 +149,92 @@ impl Default for Decoder {
         Self::new()
     }
 }
+
+/// Turns samples of the receiver's output, taken at a fixed rate, into the
+/// marks and spaces `Decoder::feed` wants (ir.rs samples PB19 every 50 us).
+pub struct Sampler {
+    low: bool, // the output at the last sample: low = carrier seen
+    run: u16,  // us it has been so, at most 0x7FFF
+}
+
+impl Sampler {
+    pub const fn new() -> Self {
+        Self { low: false, run: 0x7FFF }
+    }
+
+    /// Forget the current interval (after our own echo).
+    pub fn restart(&mut self, low: bool) {
+        self.low = low;
+        self.run = 0x7FFF;
+    }
+
+    /// One sample, `every_us` after the last. When the output changed,
+    /// returns the interval that just ended: bit 15 set for a mark, then
+    /// its length in us.
+    pub fn sample(&mut self, low: bool, every_us: u16) -> Option<u16> {
+        if low == self.low {
+            self.run = self.run.saturating_add(every_us).min(0x7FFF);
+            return None;
+        }
+        let ended = self.run | if self.low { 0x8000 } else { 0 };
+        self.low = low;
+        self.run = every_us;
+        Some(ended)
+    }
+}
+
+impl Default for Sampler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A packet as the receiver puts it out (marks a little long, spaces a
+    /// little short), sampled every 50 us at any phase, decodes.
+    #[test]
+    fn sampled_at_50_us_it_decodes() {
+        let mut p = [0u8; PACKET_MAX];
+        let n = pack(HELLO, b"HACKER HOTEL FAN", &mut p);
+        let mut edges = vec![(true, HDR_MARK_US + 100), (false, HDR_SPACE_US - 100)];
+        for k in 0..n * 8 {
+            let one = p[k / 8] >> (k % 8) & 1 != 0;
+            edges.push((true, BIT_MARK_US + 100));
+            edges.push((false, if one { ONE_SPACE_US } else { ZERO_SPACE_US } - 100));
+        }
+        edges.push((true, BIT_MARK_US + 100));
+        edges.push((false, 20_000)); // idle after
+        let mut seed = 1u32;
+        for phase in 0..50 {
+            for jitter in [0, 30, 70] {
+                let (mut s, mut d) = (Sampler::new(), Decoder::new());
+                let mut got = 0;
+                // the waveform as a function of time, sampled every 50 us
+                let mut t = phase as u32 + 5000; // idle high first
+                let mut edge_at = 5000u32;
+                let mut levels = vec![(0u32, false)];
+                for &(mark, us) in &edges {
+                    seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
+                    let j = (seed >> 16) % (2 * jitter + 1);
+                    levels.push((edge_at, mark));
+                    edge_at += us + j - jitter;
+                }
+                let mut li = 0;
+                while t < edge_at && got == 0 {
+                    while li + 1 < levels.len() && levels[li + 1].0 <= t {
+                        li += 1;
+                    }
+                    if let Some(v) = s.sample(levels[li].1, 50) {
+                        got = d.feed(v & 0x8000 != 0, (v & 0x7FFF) as u32);
+                    }
+                    t += 50;
+                }
+                assert_eq!(got, n, "phase {phase} jitter {jitter}");
+                assert_eq!(&d.buf[2..n - 1], b"HACKER HOTEL FAN");
+            }
+        }
+    }
+}

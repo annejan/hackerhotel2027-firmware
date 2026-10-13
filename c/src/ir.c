@@ -1,8 +1,12 @@
 /* IR send and receive.
  *
- * Send: TIM1 channel 4 makes the 38 kHz carrier (1/3 duty) on PB23, the
- * LED's anode; TIM1_RM = 1xx puts CH4 there (CH643RM 8.3.2.1). The
- * cathode PB21 stays low. The SysTick compare interrupt (the counter keeps
+ * Send: the LED's anode is on VCC through R37 (200 ohm, about 15 mA) and
+ * its cathode on PB21, so the LED is on while PB21 is low (hardware commit
+ * 0986add; it used to hang off PB23). TIM2 channel 1 makes the 38 kHz
+ * carrier (1/3 duty) there, output inverted, so PB21 idles high and the
+ * LED off; TIM2_RM = 001 puts CH1 on PB21 (CH643RM 8.3.2.1; CH2..CH4 then
+ * land on LED matrix pins, so only CH1 is enabled). The SysTick compare
+ * interrupt (the counter keeps
  * running free for the main loop) fires at the end of each mark and space
  * and switches the carrier on or off for the next one: about 450
  * interrupts for a name. The compare value goes through the timer's
@@ -19,8 +23,7 @@
 #include "ir.h"
 #include "irproto.h"
 
-#define CATHODE_PIN 21 /* PB21, LED cathode: always low */
-#define ANODE_PIN 23   /* PB23, LED anode: TIM1 CH4 */
+#define LED_PIN 21     /* PB21, LED cathode: TIM2 CH1, low = LED on */
 #define RECV_PIN 19    /* PB19, receiver output */
 #define CARRIER_HZ 38000
 #define ECHO_US 3000   /* the receiver's output settles after our last mark */
@@ -33,7 +36,7 @@
 #define STK_STIE (1u << 1)
 
 static uint32_t ticks_per_us; /* SysTick runs on HCLK/8 */
-static uint16_t carrier_on;   /* TIM1 compare value for 1/3 duty */
+static uint16_t carrier_on;   /* TIM2 compare value for 1/3 duty */
 
 static bool loopback; /* hear our own packets (bring-up test) */
 
@@ -68,21 +71,23 @@ void ir_init(void)
     uint16_t period = (uint16_t)(SystemCoreClock / CARRIER_HZ);
     carrier_on = period / 3;
 
-    RCC->APB2PCENR |= RCC_IOPBEN | RCC_AFIOEN | RCC_TIM1EN;
-    /* TIM1 CH4 on PB23 (TIM1_RM = 100), PWM mode 1 with preload, output
-     * low while the compare value is 0; the counter only runs while sending */
-    AFIO->PCFR1 = (AFIO->PCFR1 & ~AFIO_PCFR1_TIM1_REMAP) | AFIO_PCFR1_TIM1_REMAP_2;
-    TIM1->PSC = 0;
-    TIM1->ATRLR = period - 1;
-    TIM1->CHCTLR2 = (uint16_t)((TIM1->CHCTLR2 & 0x00FF) | 0x6000 | TIM_OC4PE);
-    TIM1->CH4CVR = 0;
-    TIM1->CCER |= TIM_CC4E;
-    TIM1->BDTR |= TIM_MOE;
-    TIM1->SWEVGR = TIM_UG;
-    /* PB21 push-pull output low, PB23 alternate push-pull (0b1011), PB19
-     * floating input (R35 pulls it up) */
-    GPIOB->BCR = 1u << CATHODE_PIN;
-    GPIOB->CFGXR = (GPIOB->CFGXR & ~0xF0F0F000u) | 0xB0304000u;
+    RCC->APB2PCENR |= RCC_IOPBEN | RCC_AFIOEN;
+    RCC->APB1PCENR |= RCC_TIM2EN;
+    /* TIM2 CH1 on PB21 (TIM2_RM = 001), PWM mode 1 with preload, active
+     * low (CC1P): the LED is on while the counter is below the compare
+     * value, so off while it is 0; the counter only runs while sending */
+    AFIO->PCFR1 = (AFIO->PCFR1 & ~AFIO_PCFR1_TIM2_REMAP) | AFIO_PCFR1_TIM2_REMAP_0;
+    TIM2->PSC = 0;
+    TIM2->ATRLR = period - 1;
+    TIM2->CHCTLR1 = (uint16_t)((TIM2->CHCTLR1 & 0xFF00) | 0x0060 | TIM_OC1PE);
+    TIM2->CH1CVR = 0;
+    TIM2->CCER = (uint16_t)((TIM2->CCER & ~0x000Fu) | TIM_CC1E | TIM_CC1P);
+    TIM2->SWEVGR = TIM_UG;
+    /* PB21 high first (LED off) and alternate push-pull (0b1011), PB19
+     * floating input (R35 pulls it up), PB23 (no longer used) input with
+     * pull-up */
+    GPIOB->BSXR = 1u << (LED_PIN - 16) | 1u << (23 - 16);
+    GPIOB->CFGXR = (GPIOB->CFGXR & ~0xF0F0F000u) | 0x80B04000u;
 
     /* EXTI line 19 from port B, both edges */
     AFIO->EXTICR[1] = (AFIO->EXTICR[1] & ~(3u << 6)) | 1u << 6;
@@ -124,15 +129,15 @@ static void next_segment(void)
     } else {
         /* done: carrier off, timer stopped */
         SysTick->CTLR = STK_STE;
-        TIM1->CH4CVR = 0;
-        TIM1->SWEVGR = TIM_UG;
-        TIM1->CTLR1 = 0;
+        TIM2->CH1CVR = 0;
+        TIM2->SWEVGR = TIM_UG;
+        TIM2->CTLR1 = 0;
         rx.mute_until = (uint32_t)SysTick->CNT + ECHO_US * ticks_per_us;
         rx.muted = !loopback;
         tx.busy = false;
         return;
     }
-    TIM1->CH4CVR = mark ? carrier_on : 0;
+    TIM2->CH1CVR = mark ? carrier_on : 0;
     tx.cmp += us * ticks_per_us;
     cmp_set(tx.cmp);
 }
@@ -153,8 +158,8 @@ bool ir_send(uint8_t type, const uint8_t *data, int len)
     tx.seg = 0;
     tx.segs = (uint16_t)(2 + n * 8 * 2 + 1);
     tx.busy = true;
-    TIM1->CNT = 0;
-    TIM1->CTLR1 = TIM_ARPE | TIM_CEN;
+    TIM2->CNT = 0;
+    TIM2->CTLR1 = TIM_ARPE | TIM_CEN;
     tx.cmp = SysTick->CNT + 20 * ticks_per_us;
     cmp_set(tx.cmp);
     SysTick->SR = 0;

@@ -1,6 +1,7 @@
-/* Infrared between badges: the IR LED D316 (anode PB23 through 47 ohm,
- * cathode PB21) and the 38 kHz receiver CGQ1 (output on PB19, low while
- * it sees carrier). Packet format in irproto.h.
+/* Infrared between badges: the IR LED D316 (anode on VCC through R37,
+ * 200 ohm; cathode PB21, low = on) and the 38 kHz receiver CGQ1 (on VCC
+ * now; output on PB19, low while it sees carrier). Packet format in
+ * irproto.h.
  *
  * The emulator has its own ir_send() / ir_busy() (../emu/emu.c), which
  * hand whole packets to the other emulators. */

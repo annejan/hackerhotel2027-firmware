@@ -196,6 +196,8 @@ or type `test` on the UART console. Connect a serial terminal to J3 to
 see what each step should look like; every step and every button event
 is logged there. ◀ / ▶ go to the previous / next test, **hold A** leaves.
 
+![bring-up test: every test in turn, from the firmware in tools/fwsim](fw/selftest.gif)
+
 | Test | On the badge | In the log |
 |---|---|---|
 | COM | all 24 PWM channels on one COM line, stepping PB0..PB15 twice a second | `COM PB3 on` |

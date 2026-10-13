@@ -7,7 +7,9 @@
 //!   cargo run -- record OUT FRAMES [EVENT ...]
 //!       write FRAMES frames to OUT for tools/sim/fwgif.py. EVENT is
 //!       FRAME:ACTION with ACTION one of press0..3, tap0..3, hold0..3,
-//!       down0..3 / up0..3 (button held), charge / nocharge.
+//!       down0..3 / up0..3 (button held), charge / nocharge, selftest
+//!       (what holding A + B does). LED rows and the IR echo are simulated
+//!       as in the emulator library, so the bring-up test records too.
 //!
 //! BADGE_NAME works as for the firmware build.
 
@@ -84,7 +86,15 @@ fn record(path: &str, frames: u32, script: &[String]) {
     let mut held = 0u8;
     let mut out = Vec::new();
     let mut ev = events.iter().peekable();
+    let mut rows = 0u32;
+    let mut echo: Option<Vec<u8>> = None;
     for t in 0..frames {
+        rows = rows.wrapping_add(2930 / fwsim::anim::FPS);
+        a.hw = fwsim::selftest::Hw { rows, vbus: a.charging() };
+        if let Some(p) = echo.take() {
+            // as received: the decoder hands the type and the data over
+            a.ir_received(p[0], &p[2..p.len() - 1]);
+        }
         let mut pressed = 0u8;
         while let Some((_, act)) = ev.next_if(|e| e.0 == t) {
             let pad = act.chars().last().and_then(|c| c.to_digit(10)).unwrap_or(0) as u8;
@@ -111,11 +121,21 @@ fn record(path: &str, frames: u32, script: &[String]) {
                 "up" => held &= !(1 << pad),
                 "charge" => a.handle(Event::Charging(true)),
                 "nocharge" => a.handle(Event::Charging(false)),
+                "selftest" => {
+                    a.handle(Event::Selftest);
+                }
                 other => panic!("unknown action {other}"),
             }
         }
         f.clear();
         a.render(&mut f, held);
+        if let Some((ty, name)) = a.ir_take() {
+            if a.ir_loopback() {
+                let mut p = [0u8; fwsim::irproto::PACKET_MAX];
+                let n = fwsim::irproto::pack(ty, name.bytes(), &mut p);
+                echo = Some(p[..n].to_vec());
+            }
+        }
         let mut buf = [0u8; FRAME_BYTES];
         dump(&f, &mut buf);
         out.extend_from_slice(&buf);

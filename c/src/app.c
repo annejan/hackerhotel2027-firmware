@@ -12,6 +12,8 @@
  * main.c to keep in flash.
  * Games: demo mode until you press ◀, B or ▶; then the game owns the
  * buttons (see games/).
+ * Challenges (challenge.c): the name tag's arms show the progress; at
+ * 25 / 25 the victory dance plays, and VICTORY in the menu plays it again.
  * Infrared: B on the name tag sends the name (HELLO). A badge that gets a
  * HELLO greets the sender ("HI" and the name) and answers with its own
  * name (REPLY), which greets back; so one press swaps names.
@@ -23,6 +25,7 @@
 #include "anim.h"
 #include "app.h"
 #include "bootloader.h"
+#include "challenge.h"
 #include "editor.h"
 #include "factory.h"
 #include "font.h"
@@ -45,14 +48,16 @@ enum {
     FIRE,
     TWINKLE,
     FIRST_GAME, /* the games, in game_kind_t order */
-    EDIT_NAME = FIRST_GAME + GAMES,
+    VICTORY = FIRST_GAME + GAMES,
+    EDIT_NAME,
     LIGHT,
     ITEMS
 };
 
 static const char *const LABELS[ITEMS] = {
     "NAME", "HACKER HOTEL", "RIPPLE", "GALAXY", "HEART", "LIFE", "FIRE", "TWINKLE",
-    "SNAKE", "STARTRIS", "BREAKOUT", "PONG", "FLAPPY", "STAR CHASE", "EDIT NAME", "LIGHT",
+    "SNAKE", "STARTRIS", "BREAKOUT", "PONG", "FLAPPY", "STAR CHASE",
+    "WHACK-A-MOLE", "SIMON", "MAZE", "HIGHER LOWER", "VICTORY", "EDIT NAME", "LIGHT",
 };
 
 /* brightness steps, as a share of full PWM duty (applied after gamma):
@@ -72,6 +77,7 @@ static struct {
     bool testing;   /* the bring-up test has the screen and the buttons */
     bool factory;   /* so has the factory test */
     bool reel;      /* the sponsor reel; a tap ends it */
+    bool dance;     /* the victory dance, just earned; a tap ends it */
     bool has_stage; /* `stage` waits for main.c to keep it in flash */
     stage_t stage;
     bool has_saved; /* `saved` waits for main.c to keep it in flash */
@@ -100,6 +106,8 @@ static void select_item(int i)
         life_init();
     else if (a.item == FIRE)
         fire_reset();
+    else if (a.item == VICTORY)
+        victory_start();
     else if (is_game(a.item))
         game_start((game_kind_t)(a.item - FIRST_GAME));
     else if (a.item == EDIT_NAME) {
@@ -175,6 +183,13 @@ void app_event(event_t ev, uint8_t arg)
     if (a.reel) {
         if (ev == EV_TAP)
             reel_done();
+        return;
+    }
+    if (a.dance) {
+        if (ev == EV_TAP) {
+            a.dance = false;
+            select_item(NAME);
+        }
         return;
     }
     if (a.testing && ev != EV_CHARGING) {
@@ -381,7 +396,7 @@ static void ir_tick(void)
         else
             a.reply_in = 1; /* still sending something: next frame */
     }
-    bool busy = a.menu || a.editing || a.testing || a.factory || a.reel || (is_game(a.item) && game_playing());
+    bool busy = a.menu || a.editing || a.testing || a.factory || a.reel || a.dance || (is_game(a.item) && game_playing());
     if (a.greet_pending && !busy) {
         a.greet_pending = false;
         a.greeting = true;
@@ -423,6 +438,19 @@ void app_render(uint8_t held)
             return;
         reel_done();
     }
+    /* all 25 just done: dance, once the game's score screen is over */
+    if (challenge_victory_due() && !(is_game(a.item) && game_playing()) && !a.menu && !a.editing) {
+        challenge_victory_done();
+        log_line("all challenges done: victory dance");
+        a.dance = true;
+        victory_start();
+    }
+    if (a.dance) {
+        if (victory_render())
+            return;
+        a.dance = false;
+        select_item(NAME);
+    }
     if (a.menu) {
         if (++a.idle > MENU_TIMEOUT)
             a.menu = false;
@@ -448,6 +476,7 @@ void app_render(uint8_t held)
     switch (a.item) {
     case NAME:
         nametag_name(t, &a.name);
+        challenge_arms(t, -1); /* the challenges' progress, to compare */
         if (a.beam) {
             draw_beam();
             a.beam--;
@@ -460,6 +489,15 @@ void app_render(uint8_t held)
     case LIFE: life_render(t); break;
     case FIRE: fire_render(); break;
     case TWINKLE: anim_twinkle(t); break;
+    case VICTORY:
+        if (challenge_total() == CHALLENGES * CHALLENGE_LEVELS) {
+            if (!victory_render())
+                victory_start(); /* over and over */
+        } else { /* not yet: how far, on the grid and the arms */
+            draw_number((uint16_t)challenge_total(), 5, 255);
+            challenge_arms(t, -1);
+        }
+        break;
     case EDIT_NAME:
     case LIGHT: select_item(NAME); break; /* menu entries only */
     default: game_render(held); break;

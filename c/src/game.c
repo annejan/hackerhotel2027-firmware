@@ -1,5 +1,6 @@
 /* Shared game shell, same as ../../src/game.rs. */
 #include "anim.h"
+#include "challenge.h"
 #include "game.h"
 #include "games.h"
 
@@ -25,6 +26,10 @@ static const game_ops_t OPS_TABLE[GAMES] = {
     [GAME_PONG] = {OPS(pong), pong_won, false},
     [GAME_FLAPPY] = {OPS(flappy), 0, false},
     [GAME_CHASE] = {OPS(chase), 0, true},
+    [GAME_WHACK] = {OPS(whack), 0, false},
+    [GAME_SIMON] = {OPS(simon), 0, false},
+    [GAME_MAZE] = {OPS(maze), maze_won, true},
+    [GAME_HILO] = {OPS(hilo), 0, true},
 };
 
 enum { RUN, CRASH, SCORE };
@@ -33,6 +38,7 @@ static struct {
     const game_ops_t *ops;
     uint8_t kind, state, timer, pressed;
     bool demo;
+    int8_t fresh; /* the challenge this game just moved up a level, or -1 */
     uint32_t t;
 } g;
 
@@ -44,6 +50,7 @@ static void restart(bool demo)
     g.demo = demo;
     g.pressed = 0;
     g.t = 0;
+    g.fresh = -1;
 }
 
 void game_start(game_kind_t kind)
@@ -94,6 +101,8 @@ void game_render(uint8_t held)
     case RUN:
         if (!g.ops->tick(g.demo, in)) {
             bool won = g.ops->won && g.ops->won();
+            if (!g.demo)
+                g.fresh = (int8_t)challenge_result((game_kind_t)g.kind, g.ops->score());
             g.state = g.demo || won ? SCORE : CRASH;
             g.timer = g.demo ? SCORE_FRAMES / 2 : won ? SCORE_FRAMES : CRASH_FRAMES;
         }
@@ -118,8 +127,11 @@ void game_render(uint8_t held)
     switch (g.state) {
     case SCORE:
         draw_number(g.ops->score(), 5, g.timer % 10 < 7 ? 255 : 70);
-        for (int i = 0; i < RGB_LEDS; i++)
-            fb_rgb(i, hsv((uint8_t)(RGB[i].arm * 51 + RGB[i].rank * 18 - g.t * 6), 255, 180));
+        if (g.fresh >= 0) /* a challenge went up a level: its new LED blinks */
+            challenge_arms(g.t, g.fresh);
+        else
+            for (int i = 0; i < RGB_LEDS; i++)
+                fb_rgb(i, hsv((uint8_t)(RGB[i].arm * 51 + RGB[i].rank * 18 - g.t * 6), 255, 180));
         break;
     case CRASH:
         if (g.timer % 6 < 3)
@@ -136,6 +148,23 @@ void game_render(uint8_t held)
         g.ops->draw(g.t);
         break;
     }
+}
+
+const uint8_t ARM_LINE_RANK[ARM_LINE] = {0, 3, 4, 5, 6};
+const uint8_t BUTTON_ARM[4] = {3, 4, 1, 2};
+
+void arm_line(uint8_t arm, int k, rgb_t c)
+{
+    for (int i = 0; i < RGB_LEDS; i++)
+        if (RGB[i].arm == arm && RGB[i].rank == ARM_LINE_RANK[k])
+            fb_rgb(i, c);
+}
+
+void arm_sides(uint8_t arm, rgb_t c)
+{
+    for (int i = 0; i < RGB_LEDS; i++)
+        if (RGB[i].arm == arm && (RGB[i].rank == 1 || RGB[i].rank == 2))
+            fb_rgb(i, c);
 }
 
 void arm_fill(uint8_t arm, int n, rgb_t c)

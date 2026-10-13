@@ -17,15 +17,18 @@
 //! name (REPLY), which greets back; so one press swaps names. The packets
 //! go out through `ir_take()` (main.rs hands them to ir.rs).
 //! Hold A + B for 3 s: the bring-up test (selftest.rs).
+//! Challenges (challenge.rs): the name tag's arms show the progress; at
+//! 25 / 25 the victory dance plays, and VICTORY in the menu plays it again.
 //! A freshly flashed badge starts with the factory test (factory.rs), and
 //! the boot after it passed with the sponsor reel (sponsors.rs); main.rs
 //! keeps track of that in flash through `stage()`.
 
 use crate::anim::{self, Fire, Life, FPS};
+use crate::challenge::{Challenges, Victory};
 use crate::editor::{Done, Editor};
 use crate::factory::{Factory, Status};
 use crate::font::text_width;
-use crate::frame::{draw_label, draw_text, hsv, Frame, Rgb, Rng};
+use crate::frame::{draw_label, draw_number, draw_text, hsv, Frame, Rgb, Rng};
 use crate::game::{Game, Kind};
 use crate::generated::{EDGE, GRID_W, RGB};
 use crate::irproto;
@@ -56,11 +59,12 @@ enum Item {
     Fire,
     Twinkle,
     Game(Kind),
+    Victory,
     EditName,
     Light,
 }
 
-const ITEMS: [(Item, &str); 16] = [
+const ITEMS: [(Item, &str); 21] = [
     (Item::Name, "NAME"),
     (Item::Hotel, "HACKER HOTEL"),
     (Item::Ripple, "RIPPLE"),
@@ -75,6 +79,11 @@ const ITEMS: [(Item, &str); 16] = [
     (Item::Game(Kind::Pong), "PONG"),
     (Item::Game(Kind::Flappy), "FLAPPY"),
     (Item::Game(Kind::Chase), "STAR CHASE"),
+    (Item::Game(Kind::Whack), "WHACK-A-MOLE"),
+    (Item::Game(Kind::Simon), "SIMON"),
+    (Item::Game(Kind::Maze), "MAZE"),
+    (Item::Game(Kind::Hilo), "HIGHER LOWER"),
+    (Item::Victory, "VICTORY"),
     (Item::EditName, "EDIT NAME"),
     (Item::Light, "LIGHT"),
 ];
@@ -115,6 +124,9 @@ pub struct App {
     test: Option<Selftest>,
     factory: Option<Factory>,
     reel: Option<Reel>,
+    challenges: Challenges,
+    victory: Victory,
+    dance: bool, // the victory dance, just earned; a tap ends it
     stage: Option<Stage>, // waits for main.rs to keep it in flash
     /// Hardware state for the bring-up test; main.rs keeps it current.
     pub hw: Hw,
@@ -153,6 +165,9 @@ impl App {
             test: None,
             factory: None,
             reel: None,
+            challenges: Challenges::default(),
+            victory: Victory::default(),
+            dance: false,
             stage: None,
             hw: Hw::default(),
         }
@@ -166,6 +181,7 @@ impl App {
             Item::Fire => self.fire = Fire::new(),
             Item::Game(kind) => self.game = Game::new(kind, &mut self.rng),
             Item::EditName => self.editor = Some(Editor::new(&self.name)),
+            Item::Victory => self.victory = Victory::default(),
             _ => {}
         }
     }
@@ -219,6 +235,13 @@ impl App {
         if self.reel.is_some() {
             if let Event::Tap(_) = ev {
                 self.reel_done();
+            }
+            return;
+        }
+        if self.dance {
+            if let Event::Tap(_) = ev {
+                self.dance = false;
+                self.select(0);
             }
             return;
         }
@@ -357,6 +380,22 @@ impl App {
         self.test = Some(Selftest::new(self.hw));
     }
 
+    /// The challenges' progress (for the console).
+    pub fn challenges(&self) -> &Challenges {
+        &self.challenges
+    }
+
+    /// Progress kept in flash, at power on.
+    pub fn load_progress(&mut self, packed: u16) {
+        self.challenges.load(packed);
+    }
+
+    /// The challenges' progress when it changed, once, for main.rs to keep
+    /// in flash.
+    pub fn progress(&mut self) -> Option<u16> {
+        self.challenges.take_changed().then(|| self.challenges.packed())
+    }
+
     /// The stage the badge just reached, once, for main.rs to keep in flash.
     pub fn stage(&mut self) -> Option<Stage> {
         self.stage.take()
@@ -464,6 +503,7 @@ impl App {
             || self.test.is_some()
             || self.factory.is_some()
             || self.reel.is_some()
+            || self.dance
             || (self.in_game() && self.game.playing());
         if self.greet_pending && !busy {
             self.greet_pending = false;
@@ -535,6 +575,24 @@ impl App {
             }
             self.reel_done();
         }
+        // all 25 just done: dance, once the game's score screen is over
+        if self.challenges.victory_due()
+            && !(self.in_game() && self.game.playing())
+            && self.menu.is_none()
+            && self.editor.is_none()
+        {
+            self.challenges.victory_done();
+            log::line("all challenges done: victory dance");
+            self.dance = true;
+            self.victory = Victory::default();
+        }
+        if self.dance {
+            if self.victory.render(f, &mut self.rng) {
+                return;
+            }
+            self.dance = false;
+            self.select(0);
+        }
         if let Some(cursor) = self.menu {
             self.idle += 1;
             if self.idle > MENU_TIMEOUT {
@@ -562,6 +620,7 @@ impl App {
         match ITEMS[self.item].0 {
             Item::Name => {
                 nametag::name(f, t, &mut self.rng, &self.name);
+                self.challenges.arms(f, t, None); // the challenges' progress, to compare
                 if self.beam > 0 {
                     self.draw_beam(f);
                     self.beam -= 1;
@@ -574,7 +633,18 @@ impl App {
             Item::Life => self.life.render(f, t, &mut self.rng),
             Item::Fire => self.fire.render(f, &mut self.rng),
             Item::Twinkle => anim::twinkle(f, t),
-            Item::Game(_) => self.game.render(f, held, &mut self.rng),
+            Item::Game(_) => self.game.render(f, held, &mut self.rng, &mut self.challenges),
+            Item::Victory => {
+                if self.challenges.complete() {
+                    if !self.victory.render(f, &mut self.rng) {
+                        self.victory = Victory::default(); // over and over
+                    }
+                } else {
+                    // not yet: how far, on the grid and the arms
+                    draw_number(f, self.challenges.total() as u16, 5, 255);
+                    self.challenges.arms(f, t, None);
+                }
+            }
             Item::EditName | Item::Light => self.select(0), // menu entries only
         }
     }

@@ -1,5 +1,6 @@
 #include <string.h>
 #include "app.h"
+#include "challenge.h"
 #include "console.h"
 #include "log.h"
 
@@ -54,7 +55,7 @@ void console_line(const char *line)
     while (*line == ' ')
         line++;
     if (is(line, "help", &arg)) {
-        log_line("info | name TEXT | show N | level N | hello | test | factory [skip] | sponsors");
+        log_line("info | name TEXT | show N | level N | hello | test | factory [skip] | sponsors | progress");
         for (int i = 0; i < app_items(); i++) {
             log_str("  ");
             log_u32((uint32_t)i);
@@ -82,6 +83,17 @@ void console_line(const char *line)
             app_factory();
     } else if (is(line, "sponsors", &arg)) {
         app_sponsors();
+    } else if (is(line, "progress", &arg)) {
+        for (int c = 0; c < CHALLENGES; c++) {
+            log_str("  ");
+            log_str(challenge_name(c));
+            log_str(" ");
+            log_u32(challenge_level(c));
+            log_line("/5");
+        }
+        log_str("  total ");
+        log_u32((uint32_t)challenge_total());
+        log_line("/25");
     } else if (is(line, "hello", &arg)) {
         if (!app_ir_hello())
             log_line("ir: busy");

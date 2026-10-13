@@ -8,7 +8,8 @@
 //!       write FRAMES frames to OUT for tools/sim/fwgif.py. EVENT is
 //!       FRAME:ACTION with ACTION one of press0..3, tap0..3, hold0..3,
 //!       down0..3 / up0..3 (button held), charge / nocharge, selftest
-//!       (what holding A + B does), factory, sponsors. LED rows and the IR echo are simulated
+//!       (what holding A + B does), factory, sponsors, show<N> (menu item
+//!       N), progress<P> (the challenges' progress, packed as in flash). LED rows and the IR echo are simulated
 //!       as in the emulator library, so the bring-up test records too.
 //!
 //! BADGE_NAME works as for the firmware build.
@@ -23,12 +24,12 @@ fn soak(frames: u32) {
     let mut rng = frame::Rng::new(99);
     let mut held = 0u8;
     // walk every item with ▶ taps; random play in between
-    for item in 0..16 {
+    for item in 0..21 {
         for t in 0..frames {
             let x = rng.next();
             if x % 9 == 0 {
                 let pad = (x >> 8) as u8 % 4;
-                if pad != 2 {
+                if pad != 2 || x % 7 == 0 {
                     a.handle(Event::Press(pad));
                     held |= 1 << pad;
                 }
@@ -107,6 +108,14 @@ fn record(path: &str, frames: u32, script: &[String]) {
         }
         let mut pressed = 0u8;
         while let Some((_, act)) = ev.next_if(|e| e.0 == t) {
+            if let Some(n) = act.strip_prefix("show") {
+                a.set_item(n.parse().expect("show<N>"));
+                continue;
+            }
+            if let Some(p) = act.strip_prefix("progress") {
+                a.load_progress(p.parse().expect("progress<P>"));
+                continue;
+            }
             let pad = act.chars().last().and_then(|c| c.to_digit(10)).unwrap_or(0) as u8;
             match act.trim_end_matches(|c: char| c.is_ascii_digit()) {
                 "press" => {

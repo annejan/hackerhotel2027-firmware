@@ -9,6 +9,7 @@
 #include "anim.h"
 #include "app.h"
 #include "bootloader.h"
+#include "challenge.h"
 #include "console.h"
 #include "frame.h"
 #include "ir.h"
@@ -29,6 +30,7 @@ static bool has_flash_name;
 /* the stage (store.h), also kept like the flash; the emulator starts as a
  * badge that has been through the factory test and the sponsor reel */
 static stage_t flash_stage = STAGE_DONE;
+static uint16_t flash_progress; /* the challenges' */
 
 /* app.c shows the USB boot screen for a second, then calls this */
 void reboot_to_boot_rom(void)
@@ -47,13 +49,18 @@ EXPORT void emu_init(void)
     else
         name_default(&name);
     app_init(&name);
+    challenge_load(flash_progress);
     if (flash_stage == STAGE_NEW)
         app_factory();
     else if (flash_stage == STAGE_TESTED)
         app_sponsors();
 }
 /* as if just flashed: the factory test, then the sponsor reel */
-EXPORT void emu_fresh(void) { flash_stage = STAGE_NEW; }
+EXPORT void emu_fresh(void)
+{
+    flash_stage = STAGE_NEW;
+    flash_progress = 0;
+}
 EXPORT uint8_t emu_brightness(void) { return app_brightness(); }
 
 EXPORT void emu_event(uint8_t kind, uint8_t arg)
@@ -108,6 +115,8 @@ static void keep_saved_name(void)
     }
     if (app_stage(&stage) && stage > flash_stage)
         flash_stage = stage;
+    if (challenge_take_changed())
+        flash_progress = challenge_packed();
 }
 
 EXPORT int emu_usb(const uint8_t *in, int len, uint8_t *out)

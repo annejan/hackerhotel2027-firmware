@@ -5,6 +5,8 @@
   python3 tools/sim/fwgif.py rec.bin out.gif "TITLE" "subtitle" [--buttons=a,b,c,d]
                               [--width=PX] [--skip=FRAMES] [--step=N]
 
+An output ending in .mp4 makes an H.264 video instead of a GIF.
+
 Each recorded frame is the grid (16 x 17), the outline (71), the RGB LEDs
 by (arm, rank) (35 x 3), a byte of button state (bits 0-3 held, 4-7 pressed)
 and the brightness, as fwsim's dump() writes them.
@@ -48,7 +50,10 @@ def main(args):
         from PIL import Image
         frames = [f.resize((width, round(width * (h.S + h.CAP) / h.S)), Image.LANCZOS) for f in frames]
     h.FPS = 30 // step
-    h.save_gif(frames, Path(out))
+    if out.endswith(".mp4"):
+        h.save_mp4(frames, Path(out), loops=1)
+    else:
+        h.save_gif(frames, Path(out))
     print(f"{out}: {len(frames)} frames, {Path(out).stat().st_size // 1024} KiB")
 
 

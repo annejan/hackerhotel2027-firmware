@@ -8,7 +8,8 @@
 
 use crate::anim::FPS;
 use crate::frame::{draw_number, hsv, Frame, Rgb, Rng};
-use crate::games::{Breakout, Chase, Flappy, Pong, Snake, Startris};
+use crate::challenge::Challenges;
+use crate::games::{Breakout, Chase, Flappy, Hilo, Maze, Pong, Simon, Snake, Startris, Whack};
 use crate::generated::{EDGE, RGB};
 use crate::Event;
 
@@ -49,6 +50,11 @@ pub enum Kind {
     Pong,
     Flappy,
     Chase,
+    // the challenges' own games (challenge.rs)
+    Whack,
+    Simon,
+    Maze,
+    Hilo,
 }
 
 /// The running game; only one exists at a time, so they share this slot.
@@ -59,6 +65,10 @@ enum Body {
     Pong(Pong),
     Flappy(Flappy),
     Chase(Chase),
+    Whack(Whack),
+    Simon(Simon),
+    Maze(Maze),
+    Hilo(Hilo),
 }
 
 macro_rules! each {
@@ -70,6 +80,10 @@ macro_rules! each {
             Body::Pong($g) => $e,
             Body::Flappy($g) => $e,
             Body::Chase($g) => $e,
+            Body::Whack($g) => $e,
+            Body::Simon($g) => $e,
+            Body::Maze($g) => $e,
+            Body::Hilo($g) => $e,
         }
     };
 }
@@ -87,6 +101,10 @@ impl Body {
             Kind::Pong => Body::Pong(Pong::new(rng)),
             Kind::Flappy => Body::Flappy(Flappy::new(rng)),
             Kind::Chase => Body::Chase(Chase::new(rng)),
+            Kind::Whack => Body::Whack(Whack::new(rng)),
+            Kind::Simon => Body::Simon(Simon::new(rng)),
+            Kind::Maze => Body::Maze(Maze::new(rng)),
+            Kind::Hilo => Body::Hilo(Hilo::new(rng)),
         }
     }
 }
@@ -105,11 +123,12 @@ pub struct Game {
     demo: bool,
     pressed: u8,
     t: u32,
+    fresh: Option<usize>, // the challenge this game just moved up a level
 }
 
 impl Game {
     pub fn new(kind: Kind, rng: &mut Rng) -> Self {
-        Self { kind, body: Body::new(kind, rng), state: State::Run, demo: true, pressed: 0, t: 0 }
+        Self { kind, body: Body::new(kind, rng), state: State::Run, demo: true, pressed: 0, t: 0, fresh: None }
     }
 
     fn restart(&mut self, demo: bool, rng: &mut Rng) {
@@ -142,7 +161,8 @@ impl Game {
         }
     }
 
-    pub fn render(&mut self, f: &mut Frame, held: u8, rng: &mut Rng) {
+    /// `ch` hears about every real game's score.
+    pub fn render(&mut self, f: &mut Frame, held: u8, rng: &mut Rng, ch: &mut Challenges) {
         self.t = self.t.wrapping_add(1);
         let inp = if self.demo {
             Input::default()
@@ -154,6 +174,9 @@ impl Game {
                 let demo = self.demo;
                 if !each!(&mut self.body, g => g.tick(demo, inp, rng)) {
                     let won = each!(&self.body, g => g.won());
+                    if !demo {
+                        self.fresh = ch.result(self.kind, each!(&self.body, g => g.score()));
+                    }
                     self.state = if demo {
                         State::Score(SCORE_FRAMES / 2)
                     } else if won {
@@ -174,9 +197,14 @@ impl Game {
             State::Score(n) => {
                 let score = each!(&self.body, g => g.score());
                 draw_number(f, score, 5, if n % 10 < 7 { 255 } else { 70 });
-                for (i, l) in RGB.iter().enumerate() {
-                    let hue = (l.arm * 51).wrapping_add(l.rank * 18).wrapping_sub((t * 6) as u8);
-                    f.rgb(i, hsv(hue, 255, 180));
+                if self.fresh.is_some() {
+                    // a challenge went up a level: its new LED blinks
+                    ch.arms(f, t, self.fresh);
+                } else {
+                    for (i, l) in RGB.iter().enumerate() {
+                        let hue = (l.arm * 51).wrapping_add(l.rank * 18).wrapping_sub((t * 6) as u8);
+                        f.rgb(i, hsv(hue, 255, 180));
+                    }
                 }
             }
             State::Crash(n) => {
@@ -206,6 +234,31 @@ impl Game {
 pub fn arm_fill(f: &mut Frame, arm: u8, n: i32, c: Rgb) {
     for (i, l) in RGB.iter().enumerate() {
         if l.arm == arm && (l.rank as i32) < n {
+            f.rgb(i, c);
+        }
+    }
+}
+
+/// The five LEDs of an arm that stand in a line, centre outward (ranks 1
+/// and 2 sit beside rank 0, at the arm's root).
+pub const ARM_LINE: usize = 5;
+const ARM_LINE_RANK: [u8; ARM_LINE] = [0, 3, 4, 5, 6];
+/// The arm a button sits under: ◀ 3, B 4, A 1, ▶ 2 (arm 0, the top, has none).
+pub const BUTTON_ARM: [u8; 4] = [3, 4, 1, 2];
+
+/// Light LED `k` (0 = centre) of arm `arm`'s line in `c`.
+pub fn arm_line(f: &mut Frame, arm: u8, k: usize, c: Rgb) {
+    for (i, l) in RGB.iter().enumerate() {
+        if l.arm == arm && l.rank == ARM_LINE_RANK[k] {
+            f.rgb(i, c);
+        }
+    }
+}
+
+/// Light the two LEDs beside the line, at the arm's root.
+pub fn arm_sides(f: &mut Frame, arm: u8, c: Rgb) {
+    for (i, l) in RGB.iter().enumerate() {
+        if l.arm == arm && (l.rank == 1 || l.rank == 2) {
             f.rgb(i, c);
         }
     }

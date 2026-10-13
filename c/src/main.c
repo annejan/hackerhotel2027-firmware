@@ -11,6 +11,7 @@
 #include "anim.h"
 #include "app.h"
 #include "buttons.h"
+#include "challenge.h"
 #include "events.h"
 #include "ir.h"
 #include "log.h"
@@ -58,6 +59,7 @@ int main(void)
     if (!store_load(&name))
         name_default(&name);
     app_init(&name);
+    challenge_load(store_progress());
     stage_t stage = store_stage();
     usb_init();
     uart_init();
@@ -91,6 +93,12 @@ int main(void)
             store_save(&name); /* a page erase and program: a few ms */
             log_str("name saved: ");
             log_line(name.s);
+        }
+        if (challenge_take_changed()) {
+            store_set_progress(challenge_packed());
+            log_str("challenges: ");
+            log_u32((uint32_t)challenge_total());
+            log_line(" of 25");
         }
         if (app_stage(&stage) && stage > store_stage())
             store_set_stage(stage); /* only forward: a re-run test does not bring the reel back */

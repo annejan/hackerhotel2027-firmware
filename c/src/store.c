@@ -1,8 +1,8 @@
 /* The name in flash, same as ../../src/store.rs. NOT TESTED ON HARDWARE.
  *
  * The last 256-byte page of the code flash (0x0800F700) holds a magic word,
- * a length and the name, and in its last word the stage (store.h). Saving
- * one keeps the other. The Makefile links with a copy of WCH's Link.ld
+ * a length and the name, in word 62 the challenges' progress and in its
+ * last word the stage (store.h). Saving one keeps the others. The Makefile links with a copy of WCH's Link.ld
  * whose code flash ends one page early, so the firmware can never be placed
  * there. `wchisp flash` only erases the sectors the new firmware needs (plus
  * one), so the name and the stage survive an update; `wchisp erase` clears
@@ -17,6 +17,8 @@
 
 #define PAGE 0x0800F700u
 #define MAGIC 0x4E414D45u /* "NAME" */
+#define PROGRESS_WORD 62
+#define PROGRESS 0x50520000u /* "PR" in the top half, the progress below */
 #define STAGE_WORD 63
 #define TESTED 0x54455354u /* "TEST" */
 #define DONE 0x444F4E45u   /* "DONE"; anything else, erased too, is new */
@@ -102,8 +104,29 @@ void store_save(const name_t *name)
         uint32_t *w = &page[2 + i / 4];
         *w = (*w & ~(0xFFu << (8 * (i % 4)))) | (uint32_t)(uint8_t)name->s[i] << (8 * (i % 4));
     }
+    page[PROGRESS_WORD] = word(PROGRESS_WORD);
     page[STAGE_WORD] = word(STAGE_WORD);
     program(page);
+}
+
+static void set_word(int i, uint32_t v)
+{
+    uint32_t page[64];
+    for (int k = 0; k < 64; k++)
+        page[k] = word(k);
+    page[i] = v;
+    program(page);
+}
+
+uint16_t store_progress(void)
+{
+    uint32_t w = word(PROGRESS_WORD);
+    return (w & 0xFFFF0000u) == PROGRESS ? (uint16_t)w : 0;
+}
+
+void store_set_progress(uint16_t packed)
+{
+    set_word(PROGRESS_WORD, PROGRESS | packed);
 }
 
 stage_t store_stage(void)
@@ -114,9 +137,5 @@ stage_t store_stage(void)
 
 void store_set_stage(stage_t stage)
 {
-    uint32_t page[64];
-    for (int i = 0; i < 64; i++)
-        page[i] = word(i);
-    page[STAGE_WORD] = stage == STAGE_DONE ? DONE : stage == STAGE_TESTED ? TESTED : 0xFFFFFFFFu;
-    program(page);
+    set_word(STAGE_WORD, stage == STAGE_DONE ? DONE : stage == STAGE_TESTED ? TESTED : 0xFFFFFFFFu);
 }

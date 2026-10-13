@@ -69,6 +69,47 @@ typedef struct {
     uint32_t t;
 } chase_t;
 
+typedef struct {
+    uint8_t arm, lit;     /* the arm, and how many of its line are lit (from outside) */
+    uint8_t state, fx;    /* WAIT / RUN / HIT, and frames of the hit flash */
+    uint8_t step;         /* frames per LED; fewer as it goes */
+    uint16_t wait, t;     /* frames left to wait; frames into this LED */
+    uint16_t hits, score;
+    uint8_t demo_at;      /* the demo stops at this many lit */
+} whack_t;
+
+#define SIMON_MAX 32
+typedef struct {
+    uint8_t seq[SIMON_MAX]; /* buttons, 0..3 */
+    uint8_t len, pos;       /* sequence length; position shown or entered */
+    uint8_t state;          /* SHOW / INPUT / GOOD */
+    uint8_t lit, lit_t;     /* the button lit by a press, and for how long */
+    uint16_t t, idle;       /* frames into this state; frames since the last press */
+    uint8_t demo_slip;      /* the demo gets this length wrong */
+    uint8_t score;          /* the longest sequence repeated */
+} simon_t;
+
+#define MAZE_CELLS 13                   /* the biggest maze, cells a side */
+#define MAZE_PX (2 * MAZE_CELLS + 1)    /* the same in pixels: walls between cells */
+typedef struct {
+    uint32_t wall[MAZE_PX]; /* bit c of row r: pixel (r, c) is a wall */
+    uint8_t size;           /* this maze's pixels a side */
+    uint8_t r, c;           /* the player, in pixels (odd) */
+    uint8_t solved;         /* mazes solved this game */
+    uint8_t dir;            /* the demo's heading, 0..3 right / down / left / up */
+    uint8_t rep;            /* frames a direction has been held, for auto-repeat */
+    uint16_t time, limit;   /* frames left, and the maze's allowance */
+    uint16_t fx;            /* frames of the "solved" flash */
+    uint8_t stack[MAZE_CELLS * MAZE_CELLS]; /* for making the maze */
+} maze_t;
+
+typedef struct {
+    uint8_t now, next;      /* the number shown, and the one coming */
+    uint8_t state;          /* GUESS / SHOW */
+    bool right;             /* the last guess */
+    uint16_t streak, t;
+} hilo_t;
+
 extern union game_state {
     snake_t snake;
     startris_t startris;
@@ -76,6 +117,10 @@ extern union game_state {
     pong_t pong;
     flappy_t flappy;
     chase_t chase;
+    whack_t whack;
+    simon_t simon;
+    maze_t maze;
+    hilo_t hilo;
 } game_state;
 
 #define GAME_FNS(name)                                  \
@@ -90,4 +135,9 @@ GAME_FNS(breakout)
 GAME_FNS(pong)
 GAME_FNS(flappy)
 GAME_FNS(chase)
+GAME_FNS(whack)
+GAME_FNS(simon)
+GAME_FNS(maze)
+GAME_FNS(hilo)
 bool pong_won(void);
+bool maze_won(void);

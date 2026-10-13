@@ -6,13 +6,15 @@ has never run on a board.
 | | | | | |
 |---|---|---|---|---|
 | ![hotel](docs/fw/hotel.gif) | ![startris](docs/fw/startris.gif) | ![breakout](docs/fw/breakout.gif) | ![star chase](docs/fw/chase.gif) | ![name swap](docs/fw/swap.gif) |
-| ![factory test](docs/fw/factory.gif) | ![sponsor reel](docs/fw/sponsors.gif) | ![bring-up test](docs/fw/selftest.gif) | | |
+| ![whack-a-mole](docs/fw/whack.gif) | ![simon](docs/fw/simon.gif) | ![maze](docs/fw/maze.gif) | ![higher lower](docs/fw/hilo.gif) | ![challenge progress](docs/fw/progress.gif) |
+| ![victory dance](docs/fw/victory.gif) | ![factory test](docs/fw/factory.gif) | ![sponsor reel](docs/fw/sponsors.gif) | ![bring-up test](docs/fw/selftest.gif) | |
 | ![ripple](docs/anim/ripple.gif) | ![galaxy](docs/anim/galaxy.gif) | ![fire](docs/anim/fire.gif) | ![heartbeat](docs/anim/heartbeat.gif) | |
 
 Top two rows: recorded from the firmware itself, running on the PC
 (`tools/fwsim`; the name swap from two C emulators), drawn on a KiCad
-render of the board with the real LED positions: games and screens, then
-the factory test, the sponsor reel and the bring-up test. Bottom row: the
+render of the board with the real LED positions: games and screens, the
+challenge games and the progress on the name tag, the victory dance, the
+factory test, the sponsor reel and the bring-up test. Bottom row: the
 Python animation sketches the firmware ports.
 
 ## Using the badge
@@ -26,6 +28,7 @@ every game, the name tag and the emulator. The short version:
 | Menu | ◀ / ▶ previous / next, **A** select, hold A close |
 | Name, hotel, animations | ◀ / ▶ previous / next screen, A brightness |
 | Games | play themselves until you press ◀, ▶ or B |
+| **Challenges** | five games, one per arm, five levels each; the name tag's arms show your progress, and all 25 earn the victory dance ([details](docs/USAGE.md#challenges)) |
 | **Hold ◀ + ▶, 3 s** | reboot into the USB boot ROM for flashing |
 | **B** on the name tag | send your name over infrared; a badge that gets it says HI with your name and sends its own back |
 | **First power-on** | a freshly flashed badge runs a 30 s pass / fail factory test for the flashing table, and the power-on after it passed plays the sponsor reel once ([details](docs/USAGE.md#factory-test-the-flashing-table)) |
@@ -79,7 +82,7 @@ receiver has no supply on the current board.
 **UART console.** The UART header J3 (115200 8N1) prints a log (boot,
 names saved, IR packets) and takes commands: `help`, `info`,
 `name TEXT`, `show N`, `level N`, `hello`, `test`, `factory`,
-`sponsors`.
+`sponsors`, `progress`.
 
 Both work in the emulator: every emulator on a PC shares one infrared
 "room" (UDP broadcast on 127.255.255.255:8028), so start two and press B
@@ -178,10 +181,11 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `app.rs` | Menu, the list of screens, brightness, charging overlay |
 | `nametag.rs` | Name tag and Hacker Hotel 2027 screens, the `Name` type |
 | `editor.rs` | Name entry on the badge (EDIT NAME) |
-| `store.rs` | The name and the first-boot stage in flash (last 256-byte page; `memory.x` keeps code out of it) |
+| `store.rs` | The name, the challenges' progress and the first-boot stage in flash (last 256-byte page; `memory.x` keeps code out of it) |
 | `anim.rs` | Animations: ripple, galaxy, heartbeat, life, fire, twinkle, charging |
 | `game.rs` | Game shell: demo mode, play, crash, score screen |
-| `games/` | Snake, Startris, Breakout, Pong, Flappy, Star Chase |
+| `games/` | Snake, Startris, Breakout, Pong, Flappy, Star Chase, Whack-a-mole, Simon, Maze, Higher lower |
+| `challenge.rs` | The five challenges (levels, progress on the arms) and the victory dance |
 | `frame.rs` | Frame buffer, text and digits, integer HSV, sine, RNG |
 | `font.rs` | 5x7 font (` `..`Z`), 3x5 digits |
 | `ledpwm.rs` | CH643 LEDPWM driver, from the reference manual: one interrupt per row, double-buffered frames |
@@ -214,19 +218,22 @@ The Python tools need numpy, scipy, Pillow and ffmpeg.
 ## Size
 
 Everything above (name tag and name entry, hotel screen, menu, 6
-animations, 6 games, the USB boot gesture, the USB device, the infrared
-name swap, the UART console, the bring-up test, the factory test and the
-sponsor reel), measured. The last 256 bytes of flash are kept for the
-saved name and the first-boot stage.
+animations, 10 games, the challenges and the victory dance, the USB boot
+gesture, the USB device, the infrared name swap, the UART console, the
+bring-up test, the factory test and the sponsor reel), measured. The last
+256 bytes of flash are kept for the saved name, the challenges' progress
+and the first-boot stage.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **36.1 KB** (58%) | 6.5 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` (default) | **49.6 KB** (80%) | 4.7 KB + stack |
-| Rust + Embassy, `opt-level = "s"` | 54.8 KB (89%) | 4.7 KB + stack |
+| C, GCC 15 `-Os` | **42.6 KB** (69%) | 6.6 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` (default) | **57.2 KB** (93%) | 4.7 KB + stack |
+| Rust + Embassy, `opt-level = "s"` | does not fit (2 KB over) | |
 
-Rust builds with `opt-level = "z"` since the factory test: with `"s"` it
-would be at 89%. The factory test and the sponsor reel cost 4.9 KB in C
+**Rust is nearly full**: 4.6 KB left, and only with `opt-level = "z"`.
+The challenges (four games, the progress and the victory dance) cost
+6.5 KB in C (the maze and the dance with its fireworks 1.8 KB each) and
+7.5 KB in Rust. The factory test and the sponsor reel cost 4.9 KB in C
 (the test 2.4 KB, a third of it the volunteers' hints in the log; the reel
 2.2 KB, of which the five greyscale logos are 0.94 KB) and 5.3 KB in
 Rust.
@@ -243,8 +250,8 @@ Infrared and the UART console add 4.2 KB (IR driver 1.1 KB, pulse codec
 0.7 KB, UART 0.5 KB, console 1.0 KB, the greeting in the app about 1 KB)
 and 0.85 KB of RAM, mostly the UART's 512-byte send buffer. Without
 USB, IR and UART, C is about 22 KB, and Rust is about 1.6 times that: about 3 KB of Embassy executor, timer
-and HAL interrupt code, the rest is code generation. There is room left for
-more games either way.
+and HAL interrupt code, the rest is code generation. C has 19 KB left
+for more; Rust would need something taken out first.
 
 ## What is solid and what is guessed
 

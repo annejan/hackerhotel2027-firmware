@@ -63,9 +63,13 @@ The items, in order:
 3. **RIPPLE**, **GALAXY**, **HEART**, **LIFE**, **FIRE**, **TWINKLE**:
    animations.
 4. **SNAKE**, **STARTRIS**, **BREAKOUT**, **PONG**, **FLAPPY**,
-   **STAR CHASE**: games.
-5. **EDIT NAME**: type your name on the badge, see [Your name](#your-name).
-6. **LIGHT**: brightness. Tap A to step through five levels: night,
+   **STAR CHASE**, **WHACK-A-MOLE**, **SIMON**, **MAZE**,
+   **HIGHER LOWER**: games. Five of them are the
+   [challenges](#challenges).
+5. **VICTORY**: the victory dance, once you have done all the challenges.
+   Until then it shows how far you are (out of 25).
+6. **EDIT NAME**: type your name on the badge, see [Your name](#your-name).
+7. **LIGHT**: brightness. Tap A to step through five levels: night,
    5%, 12.5%, 31% and full LED power. A bar on the grid shows the level.
    The menu stays open, so you can step again. The badge starts at 12.5%,
    because bare LEDs at close range are bright. Full power is for
@@ -108,8 +112,45 @@ piece, and the other games ignore it.
 | **Pong** | You play against the badge. ◀ moves your paddle (left side) up, ▶ moves it down. Hold to keep it moving. | Your points show in blue on the left arms, the badge's in red on the right arms. First to 5 wins. |
 | **Flappy** | Press ◀, ▶ or B to flap. | The pipes you pass, in gold. |
 | **Star Chase** | A light runs round the outline. Press ◀, ▶ or B when it is beside the arm that shows green. | The grid shows your level. Each hit makes the light faster. After 3 misses, the game is over. |
+| **Whack-a-mole** | A random arm lights up from its tip towards the centre. Press any button to stop it. Pressing while nothing is lit ends the game. | The sooner you stop it, the more points: 5 with one LED lit, 2 with four. It gets faster every 3 hits. When the light reaches the centre, the game is over. |
+| **Simon** | The badge lights a sequence on the four legs that have a button: ◀ lower left, ▶ lower right, A upper right, B upper left (A and B are on the back of those arms). Press it back. | The length you repeated. Each round adds one. The top arm fills as you enter the sequence, and flashes green when you got it all. A wrong button, or 5 s without one, ends the game. |
+| **Maze** | You stay in the middle of the grid and the maze moves around you; only the walls close by are lit. ◀ / ▶ left / right, B up, A down (hold to repeat). The arm that lights up points towards the exit, in the far corner. | Five mazes, from 5 x 5 to 13 x 13 cells, each with a time limit (15 s, then 8 s more per maze) shown on the outline. The side LEDs of an arm turn green for every maze solved. |
+| **Higher lower** | A number from 1 to 99. Will the next one be higher (▶, its leg lights green) or lower (◀, red)? | Your streak of right guesses fills the outline, 5 LEDs a point. One wrong guess and the game is over. |
 
 The playing field is the octagon in the middle, and its edge is the wall.
+
+| ![whack-a-mole](fw/whack.gif) | ![simon](fw/simon.gif) | ![maze](fw/maze.gif) | ![higher lower](fw/hilo.gif) |
+|---|---|---|---|
+
+## Challenges
+
+Five games are challenges, one for every arm, with five levels each: one
+for every LED in the line along the arm. On the **name tag**, the arms
+show how far you are, so you can compare with other people:
+
+![name tag with challenge progress](fw/progress.gif)
+
+| Arm | Colour | Challenge | Levels (the score you need) |
+|---|---|---|---|
+| Top | blue | Maze | mazes solved: 1, 2, 3, 4, 5 |
+| Upper right (A) | yellow | Simon | sequence length: 4, 6, 8, 10, 12 |
+| Lower right (▶) | red | Whack-a-mole | points: 20, 40, 60, 80, 100 |
+| Lower left (◀) | purple | Higher lower | streak: 3, 5, 7, 9, 12 |
+| Upper left (B) | green | Snake | food eaten: 5, 10, 15, 20, 30 |
+
+A level counts when a real game (not the demo) ends with that score; a
+worse game never takes a level away. The score screen shows the arms
+with the new level blinking. A finished challenge makes the two LEDs
+beside its line shimmer. Progress is kept in flash, next to the name, so
+it survives power off and firmware updates (`wchisp erase` clears it).
+`progress` on the UART console lists it.
+
+All 25 levels, and the badge does its **victory dance**: "I'VE COMPLETED
+ALL THE CHALLENGES AND ALL I'VE GOT IS THIS LOUSY LED ANIMATION!" dances
+across the grid while fireworks go off on the arms and the outline. Tap
+to stop it. VICTORY in the menu plays it again, over and over.
+
+![victory dance](fw/victory.gif)
 
 ## Your name
 
@@ -187,6 +228,7 @@ and received. Type a command and Enter:
 | `test` | the [bring-up test](#bring-up-test-first-boards) |
 | `factory` | the [factory test](#factory-test-the-flashing-table); `factory skip` marks it as passed without running it |
 | `sponsors` | play the [sponsor reel](#sponsor-reel) again |
+| `progress` | the [challenges](#challenges): each one's level, and the total out of 25 |
 
 Pin 3 of J3 is the badge's VCC (battery or USB), not
 3.3 V: do not connect it to the adapter's supply.

@@ -7,6 +7,8 @@
 
 #[path = "../../../src/anim.rs"]
 pub mod anim;
+#[path = "../../../src/challenge.rs"]
+pub mod challenge;
 #[path = "../../../src/console.rs"]
 pub mod console;
 #[path = "../../../src/irproto.rs"]
@@ -110,11 +112,16 @@ static FLASH_NAME: Mutex<Option<nametag::Name>> = Mutex::new(None);
 /// The stage, also kept like the flash; the emulator starts as a badge
 /// that has been through the factory test and the sponsor reel.
 static FLASH_STAGE: Mutex<app::Stage> = Mutex::new(app::Stage::Done);
+/// The challenges' progress, kept the same way.
+static FLASH_PROGRESS: Mutex<u16> = Mutex::new(0);
 
 /// What main.rs keeps in flash: a saved name, and the stage going forward.
 fn keep_flash(app: &mut app::App) {
     if let Some(name) = app.saved_name() {
         *FLASH_NAME.lock().unwrap() = Some(name);
+    }
+    if let Some(p) = app.progress() {
+        *FLASH_PROGRESS.lock().unwrap() = p;
     }
     if let Some(stage) = app.stage() {
         let mut kept = FLASH_STAGE.lock().unwrap();
@@ -126,6 +133,7 @@ fn keep_flash(app: &mut app::App) {
 #[no_mangle]
 pub extern "C" fn emu_fresh() {
     *FLASH_STAGE.lock().unwrap() = app::Stage::New;
+    *FLASH_PROGRESS.lock().unwrap() = 0;
 }
 
 #[no_mangle]
@@ -147,6 +155,7 @@ pub extern "C" fn emu_fps() -> u32 {
 pub extern "C" fn emu_init() {
     let name = FLASH_NAME.lock().unwrap().unwrap_or_default();
     let mut app = app::App::new(name);
+    app.load_progress(*FLASH_PROGRESS.lock().unwrap());
     match *FLASH_STAGE.lock().unwrap() {
         app::Stage::New => app.factory(),
         app::Stage::Tested => app.sponsors(),
@@ -319,10 +328,10 @@ mod tests {
     use super::*;
     use nametag::Name;
 
-    /// Menu -> EDIT NAME, as a user would: hold A, 14 x ▶, tap A.
+    /// Menu -> EDIT NAME, as a user would: hold A, 19 x ▶, tap A.
     fn open_editor(a: &mut app::App) {
         a.handle(Event::Hold(2));
-        for _ in 0..14 {
+        for _ in 0..19 {
             a.handle(Event::Tap(3));
         }
         a.handle(Event::Tap(2));
@@ -427,7 +436,7 @@ mod tests {
     #[test]
     fn usb_protocol() {
         let mut a = app::App::new(Name::new(b"ANNE JAN"));
-        assert_eq!(usb(&mut a, &[1]), [1, proto::VERSION, 16, 5, nametag::MAX as u8, b'r']);
+        assert_eq!(usb(&mut a, &[1]), [1, proto::VERSION, 21, 5, nametag::MAX as u8, b'r']);
         assert_eq!(usb(&mut a, &[2]), b"\x02\x08ANNE JAN");
         // SET NAME cleans up, replies with the clean name, and saves it
         assert_eq!(usb(&mut a, b"\x03\x0ehacker  hotel "), b"\x03\x0dHACKER  HOTEL");
@@ -439,9 +448,9 @@ mod tests {
         // state, items, levels
         assert_eq!(usb(&mut a, &[4]), [4, 0, 2, 0]);
         assert_eq!(usb(&mut a, &[5, 9]), [4, 9, 2, 0]);
-        assert_eq!(usb(&mut a, &[5, 14]), [0xFF, 5], "EDIT NAME is menu only");
-        assert_eq!(usb(&mut a, &[5, 15]), [0xFF, 5], "LIGHT is menu only");
-        assert_eq!(usb(&mut a, &[5, 16]), [0xFF, 5]);
+        assert_eq!(usb(&mut a, &[5, 19]), [0xFF, 5], "EDIT NAME is menu only");
+        assert_eq!(usb(&mut a, &[5, 20]), [0xFF, 5], "LIGHT is menu only");
+        assert_eq!(usb(&mut a, &[5, 21]), [0xFF, 5]);
         assert_eq!(usb(&mut a, &[5]), [0xFF, 5]);
         assert_eq!(usb(&mut a, &[6, 4]), [4, 9, 4, 0]);
         assert_eq!(usb(&mut a, &[6, 5]), [0xFF, 6]);
@@ -449,7 +458,8 @@ mod tests {
         assert_eq!(usb(&mut a, &[4]), [4, 9, 4, 1]);
         // labels
         assert_eq!(usb(&mut a, &[7, 13]), b"\x07\x0d\x0aSTAR CHASE");
-        assert_eq!(usb(&mut a, &[7, 16]), [0xFF, 7]);
+        assert_eq!(usb(&mut a, &[7, 16]), b"\x07\x10\x04MAZE");
+        assert_eq!(usb(&mut a, &[7, 21]), [0xFF, 7]);
         // unknown command, empty packet
         assert_eq!(usb(&mut a, &[0x42, 1, 2]), [0xFF, 0x42]);
         assert_eq!(usb(&mut a, &[]), [0xFF, 0]);

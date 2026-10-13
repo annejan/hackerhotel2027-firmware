@@ -9,8 +9,10 @@
 //!   test             the bring-up test (selftest.rs)
 //!   factory [skip]   the factory test (factory.rs); skip marks it passed
 //!   sponsors         the sponsor reel (sponsors.rs)
+//!   progress         the challenges' levels (challenge.rs)
 
 use crate::app::App;
+use crate::challenge::{Challenges, CHALLENGES};
 use crate::log;
 use crate::nametag::Name;
 
@@ -48,7 +50,7 @@ fn info(app: &App) {
 pub fn line(app: &mut App, line: &str) {
     let line = line.trim_start();
     if arg(line, "help").is_some() {
-        log::line("info | name TEXT | show N | level N | hello | test | factory [skip] | sponsors");
+        log::line("info | name TEXT | show N | level N | hello | test | factory [skip] | sponsors | progress");
         for i in 0..App::items() {
             log::text("  ");
             log::num(i as u32);
@@ -79,6 +81,18 @@ pub fn line(app: &mut App, line: &str) {
         }
     } else if arg(line, "sponsors").is_some() {
         app.sponsors();
+    } else if arg(line, "progress").is_some() {
+        let ch = app.challenges();
+        for c in 0..CHALLENGES {
+            log::text("  ");
+            log::text(Challenges::name(c));
+            log::text(" ");
+            log::num(ch.level(c) as u32);
+            log::line("/5");
+        }
+        log::text("  total ");
+        log::num(ch.total() as u32);
+        log::line("/25");
     } else if arg(line, "hello").is_some() {
         if !app.ir_hello() {
             log::line("ir: busy");

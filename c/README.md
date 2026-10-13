@@ -8,7 +8,9 @@ reboot into the USB boot ROM, a USB device for the WebUSB setup page
 and console (`src/ir.c`, `src/irproto.c`, `src/uart.c`, `src/console.c`),
 a bring-up test for new boards (`src/selftest.c`), the factory test a
 freshly flashed badge runs at the flashing table (`src/factory.c`) and
-the sponsor reel on the power-on after it (`src/sponsors.c`). The Rust
+the sponsor reel on the power-on after it (`src/sponsors.c`), and the
+five challenges with their victory dance (`src/challenge.c`, four of the
+games in `src/games/`). The Rust
 firmware has all of these too.
 It is plain C on registers, with no WCH peripheral library and no libc. It runs as one
 super-loop scheduled on a free-running SysTick. Interrupts: the LED
@@ -30,13 +32,13 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 Same features in both (the bring-up test is 2.8 KB in C, plus 0.75 KB for
 the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
-2.2 KB with its five logos).
+2.2 KB with its five logos, the challenges 6.5 KB with their four games).
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests and the sponsor reel | 36.1 KB | 6.5 KB (+ 2 KB stack) |
-| Rust + Embassy, `opt-level = "z"` (the default) | 49.6 KB | 4.7 KB (+ stack) |
-| Rust + Embassy, `opt-level = "s"` | 54.8 KB | 4.7 KB (+ stack) |
+| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel and the challenges | 42.6 KB | 6.6 KB (+ 2 KB stack) |
+| Rust + Embassy, `opt-level = "z"` (the default) | 57.2 KB | 4.7 KB (+ stack) |
+| Rust + Embassy, `opt-level = "s"` | does not fit | |
 
 About 3 KB of the difference is the Embassy executor, time driver and HAL
 interrupt handlers, which the super-loop does not need. The rest is code
@@ -50,28 +52,33 @@ Where the C flash goes (object sizes, before unused code is dropped):
 
 | Module | Code | Static RAM |
 |---|---|---|
+| app (menu, greeting, first boot) | 4403 | 124 |
 | anim (7 animations) | 3960 | 442 |
-| app (menu, greeting) | 3930 | 120 |
 | generated (LED tables, slot designators) | 3014 | 0 |
 | selftest (bring-up test) | 2834 | 44 |
 | games/startris | 2556 | 0 |
 | factory (factory test) | 2440 | 37 |
 | sponsors (sponsor reel, logos) | 2173 | 12 |
+| challenge (levels, progress, victory dance) | 1794 | 23 |
 | games/snake | 1788 | 688 |
+| games/maze | 1770 | 0 |
 | usb (driver, descriptors) | 1737 | 326 |
+| game (shell) | 1597 | 516 |
+| console | 1412 | 0 |
 | games/pong | 1290 | 0 |
-| frame (text, digits, MASK) | 1277 | 448 |
+| frame (text, digits, MASK) | 1277 | 452 |
 | nametag | 1257 | 0 |
 | games/chase | 1230 | 0 |
-| game (shell) | 1228 | 516 |
-| console | 1172 | 0 |
 | games/breakout | 1102 | 0 |
 | ir (send, receive) | 1058 | 223 |
+| games/simon | 929 | 0 |
 | editor (EDIT NAME) | 850 | 40 |
+| games/hilo | 790 | 0 |
+| main | 749 | 0 |
+| store (name, progress, stage in flash) | 742 | 0 |
 | games/flappy | 718 | 0 |
+| games/whack | 714 | 0 |
 | irproto (packets, pulse decoder) | 698 | 0 |
-| store (name and stage in flash) | 664 | 0 |
-| main | 631 | 0 |
 | buttons | 574 | 25 |
 | proto (USB commands) | 530 | 0 |
 | uart (log, line input) | 524 | 566 |

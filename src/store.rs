@@ -1,8 +1,8 @@
 //! The name in flash. NOT TESTED ON HARDWARE.
 //!
 //! The last 256-byte page of the code flash (0x0800_F700) holds a magic
-//! word, a length and the name, and in its last word the stage
-//! (`app::Stage`). Saving one keeps the other. memory.x ends the code flash one page
+//! word, a length and the name, in word 62 the challenges' progress and in
+//! its last word the stage (`app::Stage`). Saving one keeps the others. memory.x ends the code flash one page
 //! early, so the firmware can never be placed there. `wchisp flash` only
 //! erases the sectors the new firmware needs (plus one), so the name
 //! and the stage survive an update; `wchisp erase` clears them.
@@ -21,6 +21,8 @@ use crate::nametag::{Name, MAX};
 
 const PAGE: usize = 0x0800_F700;
 const MAGIC: u32 = 0x4E41_4D45; // "NAME"
+const PROGRESS_WORD: usize = 62;
+const PROGRESS: u32 = 0x5052_0000; // "PR" in the top half, the progress below
 const STAGE_WORD: usize = 63;
 const TESTED: u32 = 0x5445_5354; // "TEST"
 const DONE: u32 = 0x444F_4E45; // "DONE"; anything else, erased too, is new
@@ -71,8 +73,28 @@ pub fn save(name: &Name) {
         let w = &mut page[2 + i / 4];
         *w = (*w & !(0xFF << (8 * (i % 4)))) | (b as u32) << (8 * (i % 4));
     }
+    page[PROGRESS_WORD] = word(PROGRESS_WORD);
     page[STAGE_WORD] = word(STAGE_WORD);
     program(&page);
+}
+
+fn set_word(i: usize, v: u32) {
+    let mut page = [0u32; 64];
+    for (k, w) in page.iter_mut().enumerate() {
+        *w = word(k);
+    }
+    page[i] = v;
+    program(&page);
+}
+
+/// The challenges' progress, packed; 0 when none is kept.
+pub fn progress() -> u16 {
+    let w = word(PROGRESS_WORD);
+    if w & 0xFFFF_0000 == PROGRESS { w as u16 } else { 0 }
+}
+
+pub fn set_progress(packed: u16) {
+    set_word(PROGRESS_WORD, PROGRESS | packed as u32);
 }
 
 pub fn stage() -> Stage {
@@ -84,16 +106,14 @@ pub fn stage() -> Stage {
 }
 
 pub fn set_stage(stage: Stage) {
-    let mut page = [0u32; 64];
-    for (i, w) in page.iter_mut().enumerate() {
-        *w = word(i);
-    }
-    page[STAGE_WORD] = match stage {
-        Stage::Done => DONE,
-        Stage::Tested => TESTED,
-        Stage::New => 0xFFFF_FFFF,
-    };
-    program(&page);
+    set_word(
+        STAGE_WORD,
+        match stage {
+            Stage::Done => DONE,
+            Stage::Tested => TESTED,
+            Stage::New => 0xFFFF_FFFF,
+        },
+    );
 }
 
 fn program(page: &[u32; 64]) {

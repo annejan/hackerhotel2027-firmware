@@ -27,6 +27,7 @@ mod anim;
 mod app;
 mod bootloader;
 mod buttons;
+mod challenge;
 mod console;
 mod ir;
 mod irproto;
@@ -196,7 +197,7 @@ async fn main(spawner: Spawner) -> ! {
     log::line(name.as_str());
     log::line("Type help.");
     let mut stage = store::stage();
-    start_app(first_app(name, stage));
+    start_app(first_app(name, stage, store::progress()));
     spawner.spawn(infrared().unwrap());
     spawner.spawn(serial().unwrap());
     spawner.spawn(usb_device().unwrap());
@@ -223,6 +224,12 @@ async fn main(spawner: Spawner) -> ! {
             log::text("name saved: ");
             log::line(name.as_str());
         }
+        if let Some(p) = with_app(|app| app.progress()) {
+            store::set_progress(p);
+            log::text("challenges: ");
+            log::num(with_app(|app| app.challenges().total()) as u32);
+            log::line(" of 25");
+        }
         if let Some(next) = with_app(|app| app.stage()) {
             if next > stage {
                 // only forward: a re-run test does not bring the reel back
@@ -244,8 +251,9 @@ async fn main(spawner: Spawner) -> ! {
 /// The app at power on: a new badge starts with the factory test, one
 /// that just passed it with the sponsor reel. Not inside main: a local App
 /// there would take its 1.3 KB in the main task's static future.
-fn first_app(name: nametag::Name, stage: Stage) -> App {
+fn first_app(name: nametag::Name, stage: Stage, progress: u16) -> App {
     let mut app = App::new(name);
+    app.load_progress(progress);
     match stage {
         Stage::New => app.factory(),
         Stage::Tested => app.sponsors(),

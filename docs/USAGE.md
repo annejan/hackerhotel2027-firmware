@@ -242,17 +242,22 @@ power-on.
 The first power-on after the factory test passed (in practice: when the
 attendee first switches it on) plays a short sponsor reel once: "THANKS
 TO", then each sponsor's logo scrolling by in greyscale, with the arms in
-the sponsor's colours, and the name where the logo does not say it. Any
-tap skips it.
+the sponsor's colours. Any tap skips it.
 After that it never plays by itself again; `sponsors` on the UART console
 plays it on demand.
 
 ![sponsor reel](fw/sponsors.gif)
 
-The sponsors are a table at the top of `c/src/sponsors.c` and
-`src/sponsors.rs`: for now ALLNET (its word mark, then "ALLNET.CHINA"),
-badge.team and Nicolai Electronics (logo only; the logo says the name).
-Each entry has an optional logo, an optional text and two arm colours.
+The reel is a table at the top of `c/src/sponsors.c` and
+`src/sponsors.rs`: each item is a text or a logo, and how the arms light
+up. For now:
+
+| Sponsor | On the grid | Arms |
+|---|---|---|
+| ALLNET | a glimpse of the globe (taller than the grid, panned diagonally as it scrolls), then the word | a blue wave |
+| badge.team | the word mark | a rainbow sweeping diagonally across the star |
+| Nicolai Electronics | icon and name | an orange and grey wave |
+| deFEEST | the name, its outline letters filled | a yellow and blue wave |
 
 The logos come from the SVGs in `assets/sponsors`. To add or change one,
 put the SVG (or a PNG) there, add a line to the `LOGOS` table in
@@ -263,10 +268,13 @@ python3 tools/sim/logo.py --preview=logos.png   # writes c/src/logos.h and src/l
 ```
 
 A logo pixel's brightness is how much of it the picture covers, in four
-steps; lone specks are dropped. A logo up to 17 columns wide stands in
-the middle for 2.5 s, fading in; a wider one scrolls by like text. Word
-marks work best at 9 to 11 rows; thin lines and small text get lost. Each
-column costs 4 bytes of flash.
+steps; lone specks are dropped. A logo that fits the grid stands in the
+middle for 2.5 s, fading in; a wider one scrolls by like text, and one
+taller than the grid also pans from its top to its bottom. Word marks
+work best at 9 to 16 rows; thin lines and small text get lost, so the
+ALLNET globe is redrawn in the tool with fewer, thicker lines, and
+deFEEST's outline letters are filled. A logo costs a quarter byte a
+pixel: 100 to 250 bytes each.
 
 ## Bring-up test (first boards)
 

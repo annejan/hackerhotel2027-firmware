@@ -221,15 +221,15 @@ saved name and the first-boot stage.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **35.7 KB** (58%) | 6.5 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` (default) | **49.2 KB** (80%) | 4.7 KB + stack |
-| Rust + Embassy, `opt-level = "s"` | 54.5 KB (88%) | 4.7 KB + stack |
+| C, GCC 15 `-Os` | **36.1 KB** (58%) | 6.5 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` (default) | **49.6 KB** (80%) | 4.7 KB + stack |
+| Rust + Embassy, `opt-level = "s"` | 54.8 KB (89%) | 4.7 KB + stack |
 
 Rust builds with `opt-level = "z"` since the factory test: with `"s"` it
-would be at 88%. The factory test and the sponsor reel cost 4.5 KB in C
+would be at 89%. The factory test and the sponsor reel cost 4.9 KB in C
 (the test 2.4 KB, a third of it the volunteers' hints in the log; the reel
-1.8 KB, of which the three greyscale logos are 0.75 KB, 4 bytes a column)
-and 5 KB in Rust.
+2.2 KB, of which the five greyscale logos are 0.94 KB) and 5.3 KB in
+Rust.
 
 Roughly where the C flash goes: animations 4.0 KB, the app (menu, USB
 settings, infrared greeting) 3.4 KB, Startris 2.5 KB, LED tables 2.2 KB,

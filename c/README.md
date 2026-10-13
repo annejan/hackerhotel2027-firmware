@@ -34,8 +34,8 @@ the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests and the sponsor reel | 34.5 KB | 6.5 KB (+ 2 KB stack) |
-| Rust + Embassy, `opt-level = "z"` (the default) | 48.1 KB | 4.7 KB (+ stack) |
+| C, with USB, IR, the UART console, the bring-up and factory tests and the sponsor reel | 34.6 KB | 6.5 KB (+ 2 KB stack) |
+| Rust + Embassy, `opt-level = "z"` (the default) | 48.2 KB | 4.7 KB (+ stack) |
 | Rust + Embassy, `opt-level = "s"` | 53.2 KB | 4.7 KB (+ stack) |
 
 About 3 KB of the difference is the Embassy executor, time driver and HAL
@@ -55,7 +55,7 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | generated (LED tables, slot designators) | 3014 | 0 |
 | selftest (bring-up test) | 2834 | 44 |
 | games/startris | 2556 | 0 |
-| factory (factory test) | 2366 | 37 |
+| factory (factory test) | 2440 | 37 |
 | games/snake | 1788 | 688 |
 | usb (driver, descriptors) | 1737 | 326 |
 | games/pong | 1290 | 0 |

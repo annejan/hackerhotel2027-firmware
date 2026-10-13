@@ -7,8 +7,9 @@
 //!
 //!   LED  every LED on: white, then the arms red, green, blue. B = all lit,
 //!        A = something dark or the wrong colour
-//!   ROW  one COM line, then one PWM channel at a time: exactly one moving
-//!        line or set of dots, never two. B = good, A = fault
+//!   ROW  one row top to bottom, then one column left to right (a COM line,
+//!        then a PWM channel): exactly one moving line or set of dots,
+//!        never two. B = good, A = fault
 //!   KEY  press ◀, B, A and ▶ once each (automatic; 20 s)
 //!   USB  USB power seen on PC3 for a second (automatic; 10 s)
 //!   IR   sends test packets until one is heard: its own echo, or another
@@ -21,7 +22,7 @@
 use crate::anim::FPS;
 use crate::font::text_width;
 use crate::frame::{draw_number, draw_text, Frame, Rgb};
-use crate::generated::{COMS, EDGE, GRID_W, PWM_CHANNELS, RGB};
+use crate::generated::{COMS, EDGE, GRID, GRID_W, PWM_CHANNELS, RGB};
 use crate::irproto;
 use crate::log;
 use crate::nametag::Name;
@@ -199,12 +200,21 @@ impl Factory {
                 }
             }
             ROW => {
+                // in the order you see them, not wiring order (row 7 is
+                // PB15, column 7 is PA9): the COM line of grid row k top to
+                // bottom, then the PWM channel of grid column k left to
+                // right, then PA17..PA23, which only drive the outline and
+                // the arms. Column 8 has a LED in every row, row 7 in every
+                // column.
                 let k = (t / ROW_FRAMES) as usize % (COMS + PWM_CHANNELS);
                 if k < COMS {
-                    f.px[k * PWM_CHANNELS..][..PWM_CHANNELS].fill(255);
+                    let com = GRID[k][8] as usize / PWM_CHANNELS;
+                    f.px[com * PWM_CHANNELS..][..PWM_CHANNELS].fill(255);
                 } else {
+                    let k = k - COMS;
+                    let pwm = if k < GRID_W { GRID[7][k] as usize % PWM_CHANNELS } else { k };
                     for c in 0..COMS {
-                        f.px[c * PWM_CHANNELS + k - COMS] = 255;
+                        f.px[c * PWM_CHANNELS + pwm] = 255;
                     }
                 }
             }

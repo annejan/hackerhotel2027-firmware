@@ -221,8 +221,8 @@ saved name and the first-boot stage.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **34.5 KB** (56%) | 6.5 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` (default) | **48.1 KB** (78%) | 4.7 KB + stack |
+| C, GCC 15 `-Os` | **34.6 KB** (56%) | 6.5 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` (default) | **48.2 KB** (78%) | 4.7 KB + stack |
 | Rust + Embassy, `opt-level = "s"` | 53.2 KB (86%) | 4.7 KB + stack |
 
 Rust builds with `opt-level = "z"` since the factory test: with `"s"` it
@@ -291,6 +291,12 @@ more games either way.
   12 mA at VDD − 0.4 V; PB pins are made to sink (100 mA). Better: anode
   to VCC through the resistor, cathode on PB21, carrier from TIM2 CH1
   (TIM2_RM = 001 puts CH1 on PB21).
+- **Wiring order is not the order you see.** Grid column 7 (D143) goes
+  through R10 to PA9, columns 8 and 9 (D141, D142) through R8 and R9 to
+  PA7 and PA8; grid row 7 is on PB15, after row 15 on PB0. Harmless: the
+  LED map (`tools/gen_layout.py`) puts every LED where it is, so text and
+  games are unaffected. Only a test that walks the wires shows it; the
+  factory test walks the grid in the order you see instead.
 - **No battery gauge.** The board has no battery-voltage sense, so the
   firmware can show *that* the battery charges but not *how full* it is.
 - **USB in Rust.** ch32-hal has no USB driver for the CH643, so `src/usb.rs`

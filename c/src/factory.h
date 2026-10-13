@@ -7,8 +7,9 @@
  *
  *   LED  every LED on: white, then the arms red, green, blue. B = all lit,
  *        A = something dark or the wrong colour
- *   ROW  one COM line, then one PWM channel at a time: exactly one moving
- *        line or set of dots, never two. B = good, A = fault
+ *   ROW  one row top to bottom, then one column left to right (a COM line,
+ *        then a PWM channel): exactly one moving line or set of dots,
+ *        never two. B = good, A = fault
  *   KEY  press ◀, B, A and ▶ once each (automatic; 20 s)
  *   USB  USB power seen on PC3 for a second (automatic; 10 s)
  *   IR   sends test packets until one is heard: its own echo, or another

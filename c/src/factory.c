@@ -151,13 +151,22 @@ static void step_render(uint32_t now)
         break;
     }
     case F_ROW: {
+        /* in the order you see them, not wiring order (row 7 is PB15,
+         * column 7 is PA9): the COM line of grid row k top to bottom, then
+         * the PWM channel of grid column k left to right, then PA17..PA23,
+         * which only drive the outline and the arms. Column 8 has a LED in
+         * every row, row 7 in every column. */
         int k = (int)(t / ROW_FRAMES % (COMS + PWM_CHANNELS));
-        if (k < COMS)
+        if (k < COMS) {
+            int com = GRID[k][8] / PWM_CHANNELS;
             for (int p = 0; p < PWM_CHANNELS; p++)
-                fb[k * PWM_CHANNELS + p] = 255;
-        else
+                fb[com * PWM_CHANNELS + p] = 255;
+        } else {
+            k -= COMS;
+            int pwm = k < GRID_W ? GRID[7][k] % PWM_CHANNELS : k;
             for (int c = 0; c < COMS; c++)
-                fb[c * PWM_CHANNELS + k - COMS] = 255;
+                fb[c * PWM_CHANNELS + pwm] = 255;
+        }
         break;
     }
     case F_KEY:

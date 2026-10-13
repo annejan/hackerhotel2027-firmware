@@ -209,7 +209,7 @@ steps go by.
 | Step | The badge shows | You do |
 |---|---|---|
 | **LED** | Every LED on: white, then the arms red, green, blue, over and over | All lit, right colours: tap **B**. Something dark or the wrong colour: tap **A** |
-| **ROW** | One line of LEDs at a time, then one set of dots at a time, moving | Always exactly one line or set moving, never two, none missing: tap **B**. Otherwise tap **A** |
+| **ROW** | One row lit, moving top to bottom, then one column, moving left to right, then a few sets of dots on the outline and arms | Always exactly one row, column or set of dots, never two, none missing: tap **B**. Otherwise tap **A** |
 | **KEY** | `<` `B` `A` `>` dimmed | Press each button once; each lights up. Goes on by itself |
 | **USB** | `USB`, blinking until it sees USB power | Keep it plugged in. Goes on after a second of USB power |
 | **IR** | Heard (top) and sent (bottom) test packets | Nothing. It passes on its own echo, or on test packets from another badge nearby |

@@ -6,8 +6,10 @@ flash), the hotel screen, the animations, all six games, the ◀ + ▶
 reboot into the USB boot ROM, a USB device for the WebUSB setup page
 (`src/usb.c`, `src/proto.c`), infrared name swapping with a UART log
 and console (`src/ir.c`, `src/irproto.c`, `src/uart.c`, `src/console.c`),
-and a bring-up test for new boards (`src/selftest.c`). The Rust firmware
-has all of these too.
+a bring-up test for new boards (`src/selftest.c`), the factory test a
+freshly flashed badge runs at the flashing table (`src/factory.c`) and
+the sponsor reel on the power-on after it (`src/sponsors.c`). The Rust
+firmware has all of these too.
 It is plain C on registers, with no WCH peripheral library and no libc. It runs as one
 super-loop scheduled on a free-running SysTick. Interrupts: the LED
 scanner at the end of each row, and for infrared the SysTick compare
@@ -27,13 +29,14 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 ## Size compared with Rust
 
 Same features in both (the bring-up test is 2.8 KB in C, plus 0.75 KB for
-the slot-to-designator table).
+the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
+0.65 KB).
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console and the bring-up test | 32.0 KB | 6.4 KB (+ 2 KB stack) |
-| Rust + Embassy, `opt-level = "s"` | 49.8 KB | 4.7 KB (+ stack) |
-| Rust + Embassy, `opt-level = "z"` | 45.4 KB | 4.7 KB (+ stack) |
+| C, with USB, IR, the UART console, the bring-up and factory tests and the sponsor reel | 34.5 KB | 6.5 KB (+ 2 KB stack) |
+| Rust + Embassy, `opt-level = "z"` (the default) | 48.1 KB | 4.7 KB (+ stack) |
+| Rust + Embassy, `opt-level = "s"` | 53.2 KB | 4.7 KB (+ stack) |
 
 About 3 KB of the difference is the Embassy executor, time driver and HAL
 interrupt handlers, which the super-loop does not need. The rest is code
@@ -48,10 +51,11 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | Module | Code | Static RAM |
 |---|---|---|
 | anim (7 animations) | 3960 | 442 |
-| app (menu, greeting) | 3566 | 112 |
+| app (menu, greeting) | 3930 | 120 |
 | generated (LED tables, slot designators) | 3014 | 0 |
 | selftest (bring-up test) | 2834 | 44 |
 | games/startris | 2556 | 0 |
+| factory (factory test) | 2366 | 37 |
 | games/snake | 1788 | 688 |
 | usb (driver, descriptors) | 1737 | 326 |
 | games/pong | 1290 | 0 |
@@ -59,15 +63,16 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | nametag | 1257 | 0 |
 | games/chase | 1230 | 0 |
 | game (shell) | 1228 | 516 |
+| console | 1172 | 0 |
 | games/breakout | 1102 | 0 |
 | ir (send, receive) | 1058 | 223 |
-| console | 998 | 0 |
 | editor (EDIT NAME) | 850 | 40 |
 | games/flappy | 718 | 0 |
 | irproto (packets, pulse decoder) | 698 | 0 |
+| store (name and stage in flash) | 664 | 0 |
+| sponsors (sponsor reel) | 656 | 16 |
+| main | 631 | 0 |
 | buttons | 574 | 25 |
-| main | 555 | 0 |
 | proto (USB commands) | 530 | 0 |
 | uart (log, line input) | 524 | 566 |
 | ledpwm (scanner interrupt, row buffers) | 520 | 1031 |
-| store (name in flash) | 506 | 0 |

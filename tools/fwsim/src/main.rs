@@ -8,7 +8,7 @@
 //!       write FRAMES frames to OUT for tools/sim/fwgif.py. EVENT is
 //!       FRAME:ACTION with ACTION one of press0..3, tap0..3, hold0..3,
 //!       down0..3 / up0..3 (button held), charge / nocharge, selftest
-//!       (what holding A + B does). LED rows and the IR echo are simulated
+//!       (what holding A + B does), factory, sponsors. LED rows and the IR echo are simulated
 //!       as in the emulator library, so the bring-up test records too.
 //!
 //! BADGE_NAME works as for the firmware build.
@@ -51,6 +51,16 @@ fn soak(frames: u32) {
             if x % 7919 == 0 {
                 a.handle(Event::Selftest); // left again by a random Hold(2)
             }
+            if x % 6007 == 0 {
+                a.factory(); // left by passing, or by A + B into the bring-up test
+            }
+            if x % 8009 == 0 {
+                a.sponsors(); // left by any tap
+            }
+            if x % 9001 == 0 {
+                a.factory_skip();
+            }
+            let _ = a.stage();
             if x % 5003 == 0 {
                 a.handle(Event::Hold((x >> 16) as u8 % 4));
             }
@@ -121,9 +131,9 @@ fn record(path: &str, frames: u32, script: &[String]) {
                 "up" => held &= !(1 << pad),
                 "charge" => a.handle(Event::Charging(true)),
                 "nocharge" => a.handle(Event::Charging(false)),
-                "selftest" => {
-                    a.handle(Event::Selftest);
-                }
+                "selftest" => a.handle(Event::Selftest),
+                "factory" => a.factory(),
+                "sponsors" => a.sponsors(),
                 other => panic!("unknown action {other}"),
             }
         }

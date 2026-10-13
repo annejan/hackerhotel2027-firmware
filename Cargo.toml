@@ -22,6 +22,6 @@ qingke-rt = "0.8"
 [profile.release]
 strip = false     # symbols are not flashed, keep them for debugging
 lto = true
-opt-level = "s"
+opt-level = "z"     # "s" is ~5 KB larger; the 62 KB flash is getting full
 debug = true
 codegen-units = 1

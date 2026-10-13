@@ -3,7 +3,10 @@
 
   make -C c emu                      # C firmware   -> c/build/libhh27.so
   (cd tools/fwsim && cargo build --release)   # Rust -> tools/fwsim/target/*/release/libfwsim.so
-  python3 tools/emu/emu.py [c|rust|path/to/lib.so] [--web]
+  python3 tools/emu/emu.py [c|rust|path/to/lib.so] [--web] [--fresh]
+
+--fresh starts as a freshly flashed badge: the factory test first, and
+after a reset (R) the sponsor reel, as on a real badge.
 
 --web also serves the badge's setup page (docs/webusb) on
 http://localhost:8027/ and passes its packets to the firmware, as WebUSB
@@ -72,7 +75,7 @@ def find_lib(which):
 
 
 class Firmware:
-    def __init__(self, path):
+    def __init__(self, path, fresh=False):
         self.lib = lib = ctypes.CDLL(str(path))
         lib.emu_abi.restype = ctypes.c_uint32
         lib.emu_firmware.restype = ctypes.c_char_p
@@ -98,6 +101,8 @@ class Firmware:
         self.has_console = hasattr(lib, "emu_console")
         if self.has_console:
             lib.emu_console.argtypes = [ctypes.c_char_p]
+        if fresh and hasattr(lib, "emu_fresh"):
+            lib.emu_fresh()
         lib.emu_init()
 
     def usb(self, packet):
@@ -449,7 +454,7 @@ def main(args):
         print(__doc__)
         return
     names = [a for a in args if not a.startswith("--")]
-    fw = Firmware(find_lib(names[0] if names else None))
+    fw = Firmware(find_lib(names[0] if names else None), fresh="--fresh" in args)
     print(f"{fw.name} firmware, {fw.fps} fps", flush=True)
     web = None
     if "--web" in args:

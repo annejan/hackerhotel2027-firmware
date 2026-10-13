@@ -185,9 +185,81 @@ and received. Type a command and Enter:
 | `level N` | brightness, 0 (night) to 4 (full) |
 | `hello` | send the name over infrared, as B on the name tag does |
 | `test` | the [bring-up test](#bring-up-test-first-boards) |
+| `factory` | the [factory test](#factory-test-the-flashing-table); `factory skip` marks it as passed without running it |
+| `sponsors` | play the [sponsor reel](#sponsor-reel) again |
 
 Pin 3 of J3 is the badge's VCC (battery or USB), not
 3.3 V: do not connect it to the adapter's supply.
+
+## Factory test (the flashing table)
+
+A freshly flashed badge starts with a short factory test, made for
+volunteers at the flashing table: about 30 seconds per badge, pass or
+fail, no serial terminal needed. It comes back at every power-on until it
+has passed once. The badge keeps that in flash, in the same page as the
+name. A later `wchisp flash` keeps that page, so an update does not bring
+the test back; `wchisp erase` does. To run it again on purpose, type
+`factory` on the UART console.
+
+![factory test: LED, ROW, KEY, USB and IR, then OK](fw/factory.gif)
+
+Each step shows its name for a second first. The outline fills up as the
+steps go by.
+
+| Step | The badge shows | You do |
+|---|---|---|
+| **LED** | Every LED on: white, then the arms red, green, blue, over and over | All lit, right colours: tap **B**. Something dark or the wrong colour: tap **A** |
+| **ROW** | One line of LEDs at a time, then one set of dots at a time, moving | Always exactly one line or set moving, never two, none missing: tap **B**. Otherwise tap **A** |
+| **KEY** | `<` `B` `A` `>` dimmed | Press each button once; each lights up. Goes on by itself |
+| **USB** | `USB`, blinking until it sees USB power | Keep it plugged in. Goes on after a second of USB power |
+| **IR** | Heard (top) and sent (bottom) test packets | Nothing. It passes on its own echo, or on test packets from another badge nearby |
+| **OK** | Green arms, `OK` | Done. After 3 s the badge goes to its name tag |
+
+A failed step blinks red arms and shows the step's name: put the badge
+on the repair pile. Tap **B** to try that step once more. KEY fails after
+20 s and USB and IR after 10 s; the UART log says what was missing
+(`factory test: FAIL at KEY: missing: < . A .`).
+
+On the current board revision the IR receiver has no supply (see the
+hardware notes in the README), so the IR step fails there until that is
+fixed.
+
+Holding **A + B for 3 s** leaves the factory test for the full bring-up
+test below. The badge then runs the factory test again at the next
+power-on.
+
+### Card for the flashing table
+
+> 1. Flash the badge. Keep it on USB. It starts the test by itself.
+> 2. **LED**: every LED lit? Arms go red, green, blue? Yes: **B**. No: **A**.
+> 3. **ROW**: one line moving at a time, never two? Yes: **B**. No: **A**.
+> 4. **KEY**: press ◀, B, A and ▶ once each.
+> 5. **USB** and **IR** go by themselves. Keep it on USB.
+> 6. Green **OK**: good badge. Red: repair pile.
+
+## Sponsor reel
+
+The first power-on after the factory test passed (in practice: when the
+attendee first switches it on) plays a short sponsor reel once: "THANKS
+TO", then each sponsor's logo, if there is one, and name. Any tap skips it.
+After that it never plays by itself again; `sponsors` on the UART console
+plays it on demand.
+
+![sponsor reel](fw/sponsors.gif)
+
+The sponsors are a table at the top of `c/src/sponsors.c` and
+`src/sponsors.rs` (for now: ALLNET.CHINA, BADGE.TEAM and NICOLAI
+ELECTRONICS, names only). To add a logo, make a small picture, preferably
+something designed for 16 x 17 pixels, and convert it:
+
+```sh
+python3 tools/sim/logo.py logo.png      # prints a preview, and the rows for C and Rust
+```
+
+Paste the rows into both files and point the sponsor's entry at them. The
+grid is an octagon: the preview marks pixels that fall in the cut-off
+corners, where there are no LEDs. Logos show for 2.5 s, fading in, before
+the name scrolls by.
 
 ## Bring-up test (first boards)
 
@@ -272,6 +344,11 @@ Every emulator on the PC shares one infrared "room"
 press `B` on one's name tag, and they swap names. Lines typed into the
 terminal go to the badge's UART console (try `help`), and the badge's log
 appears there too.
+
+With `--fresh`, the emulator starts as a freshly flashed badge: the
+factory test first (`C` is the USB power it waits for), and after `R` the
+sponsor reel. Without it, the emulator is a badge that has been through
+both.
 
 With `--web`, the emulator also serves the setup page on
 <http://localhost:8027/>. Click **Connect emulator** there: the page then

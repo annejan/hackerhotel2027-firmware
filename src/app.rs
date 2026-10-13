@@ -17,9 +17,13 @@
 //! name (REPLY), which greets back; so one press swaps names. The packets
 //! go out through `ir_take()` (main.rs hands them to ir.rs).
 //! Hold A + B for 3 s: the bring-up test (selftest.rs).
+//! A freshly flashed badge starts with the factory test (factory.rs), and
+//! the boot after it passed with the sponsor reel (sponsors.rs); main.rs
+//! keeps track of that in flash through `stage()`.
 
 use crate::anim::{self, Fire, Life, FPS};
 use crate::editor::{Done, Editor};
+use crate::factory::{Factory, Status};
 use crate::font::text_width;
 use crate::frame::{draw_label, draw_text, hsv, Frame, Rgb, Rng};
 use crate::game::{Game, Kind};
@@ -28,7 +32,18 @@ use crate::irproto;
 use crate::log;
 use crate::nametag::{self, Name};
 use crate::selftest::{Hw, Selftest};
+use crate::sponsors::Reel;
 use crate::Event;
+
+/// How far the badge has got since it was flashed (kept in flash by
+/// store.rs): the factory test runs until it passes, the sponsor reel
+/// plays on the boot after that.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Stage {
+    New,
+    Tested,
+    Done,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Item {
@@ -98,6 +113,9 @@ pub struct App {
     greet: Name, // the other badge's name
     met: u16,    // HELLOs and REPLYs since power on
     test: Option<Selftest>,
+    factory: Option<Factory>,
+    reel: Option<Reel>,
+    stage: Option<Stage>, // waits for main.rs to keep it in flash
     /// Hardware state for the bring-up test; main.rs keeps it current.
     pub hw: Hw,
 }
@@ -133,6 +151,9 @@ impl App {
             greet: Name::new(b""),
             met: 0,
             test: None,
+            factory: None,
+            reel: None,
+            stage: None,
             hw: Hw::default(),
         }
     }
@@ -186,6 +207,21 @@ impl App {
         if ev == Event::Selftest && self.test.is_none() {
             return self.selftest();
         }
+        if let Event::Charging(c) = ev {
+            self.charging = c;
+        }
+        if let Some(factory) = self.factory.as_mut() {
+            if !matches!(ev, Event::Charging(_)) {
+                factory.handle(ev);
+            }
+            return;
+        }
+        if self.reel.is_some() {
+            if let Event::Tap(_) = ev {
+                self.reel_done();
+            }
+            return;
+        }
         if let Some(test) = self.test.as_mut() {
             if !matches!(ev, Event::Charging(_)) {
                 if !test.handle(ev, self.hw) {
@@ -196,7 +232,6 @@ impl App {
             }
         }
         if let Event::Charging(c) = ev {
-            self.charging = c;
             self.show_charge = c
                 && !(self.in_game() && self.game.playing())
                 && self.menu.is_none()
@@ -317,7 +352,50 @@ impl App {
         self.editor = None;
         self.show_charge = false;
         self.greeting = false;
+        self.factory = None;
+        self.reel = None;
         self.test = Some(Selftest::new(self.hw));
+    }
+
+    /// The stage the badge just reached, once, for main.rs to keep in flash.
+    pub fn stage(&mut self) -> Option<Stage> {
+        self.stage.take()
+    }
+
+    /// The factory test (factory.rs): main.rs starts it on a new badge,
+    /// the console with `factory`.
+    pub fn factory(&mut self) {
+        self.menu = None;
+        self.editor = None;
+        self.show_charge = false;
+        self.greeting = false;
+        self.test = None;
+        self.reel = None;
+        self.factory = Some(Factory::new());
+    }
+
+    /// Mark the factory test as passed without running it (`factory skip`).
+    pub fn factory_skip(&mut self) {
+        log::line("factory test: skipped");
+        self.stage = Some(Stage::Tested);
+    }
+
+    /// The sponsor reel (sponsors.rs).
+    pub fn sponsors(&mut self) {
+        self.menu = None;
+        self.editor = None;
+        self.show_charge = false;
+        self.greeting = false;
+        self.test = None;
+        self.factory = None;
+        log::line("sponsor reel");
+        self.reel = Some(Reel::new());
+    }
+
+    fn reel_done(&mut self) {
+        self.reel = None;
+        self.stage = Some(Stage::Done);
+        self.select(0);
     }
 
     /// Send our name over IR, as B on the name tag does; false while a
@@ -339,7 +417,7 @@ impl App {
 
     /// The bring-up test's IR check wants to hear our own packets.
     pub fn ir_loopback(&self) -> bool {
-        self.test.as_ref().is_some_and(|t| t.loopback())
+        self.test.as_ref().is_some_and(|t| t.loopback()) || self.factory.as_ref().is_some_and(|f| f.loopback())
     }
 
     /// A packet from another badge (or our own, in the IR test).
@@ -347,6 +425,8 @@ impl App {
         if ty == irproto::TEST {
             if let Some(test) = self.test.as_mut() {
                 test.ir_heard();
+            } else if let Some(factory) = self.factory.as_mut() {
+                factory.ir_heard();
             }
             return;
         }
@@ -379,7 +459,12 @@ impl App {
                 }
             }
         }
-        let busy = self.menu.is_some() || self.editor.is_some() || self.test.is_some() || (self.in_game() && self.game.playing());
+        let busy = self.menu.is_some()
+            || self.editor.is_some()
+            || self.test.is_some()
+            || self.factory.is_some()
+            || self.reel.is_some()
+            || (self.in_game() && self.game.playing());
         if self.greet_pending && !busy {
             self.greet_pending = false;
             self.greeting = true;
@@ -432,6 +517,23 @@ impl App {
         self.t = self.t.wrapping_add(1);
         if let Some(test) = self.test.as_mut() {
             return test.render(f, held, self.hw, self.level, self.charging, &mut self.ir_out);
+        }
+        if let Some(factory) = self.factory.as_mut() {
+            match factory.render(f, self.hw, self.charging, &mut self.ir_out) {
+                Status::Passed => self.stage = Some(Stage::Tested),
+                Status::Done => {
+                    self.factory = None;
+                    self.select(0);
+                }
+                Status::Busy => {}
+            }
+            return;
+        }
+        if let Some(reel) = self.reel.as_mut() {
+            if reel.render(f) {
+                return;
+            }
+            self.reel_done();
         }
         if let Some(cursor) = self.menu {
             self.idle += 1;

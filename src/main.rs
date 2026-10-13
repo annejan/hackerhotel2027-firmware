@@ -35,6 +35,7 @@ mod selftest;
 mod uart;
 mod usb;
 mod editor;
+mod factory;
 mod font;
 mod frame;
 mod game;
@@ -43,6 +44,7 @@ mod generated;
 mod ledpwm;
 mod nametag;
 mod proto;
+mod sponsors;
 mod store;
 
 use core::cell::{RefCell, UnsafeCell};
@@ -56,7 +58,7 @@ use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Ticker, Timer};
 use hal::gpio::{Input, Pull};
 
-use app::App;
+use app::{App, Stage};
 use frame::Frame;
 
 /// Things that happen to the badge, consumed by the render loop.
@@ -192,7 +194,8 @@ async fn main(spawner: Spawner) -> ! {
     log::text("\r\nhh27 starfish badge, rust firmware. Name: ");
     log::line(name.as_str());
     log::line("Type help.");
-    start_app(App::new(name));
+    let mut stage = store::stage();
+    start_app(first_app(name, stage));
     spawner.spawn(infrared().unwrap());
     spawner.spawn(serial().unwrap());
     spawner.spawn(usb_device().unwrap());
@@ -219,6 +222,13 @@ async fn main(spawner: Spawner) -> ! {
             log::text("name saved: ");
             log::line(name.as_str());
         }
+        if let Some(next) = with_app(|app| app.stage()) {
+            if next > stage {
+                // only forward: a re-run test does not bring the reel back
+                store::set_stage(next);
+                stage = next;
+            }
+        }
         frame.clear();
         let level = with_app(|app| {
             app.hw = selftest::Hw { rows: ledpwm::rows(), vbus: vbus() };
@@ -228,6 +238,19 @@ async fn main(spawner: Spawner) -> ! {
         display.show(&frame, level);
         ticker.next().await;
     }
+}
+
+/// The app at power on: a new badge starts with the factory test, one
+/// that just passed it with the sponsor reel. Not inside main: a local App
+/// there would take its 1.3 KB in the main task's static future.
+fn first_app(name: nametag::Name, stage: Stage) -> App {
+    let mut app = App::new(name);
+    match stage {
+        Stage::New => app.factory(),
+        Stage::Tested => app.sponsors(),
+        Stage::Done => {}
+    }
+    app
 }
 
 #[panic_handler]

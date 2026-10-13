@@ -20,11 +20,15 @@
 #define EXPORT __attribute__((visibility("default")))
 
 EXPORT void emu_ir_rx(const uint8_t *in, int len);
+static void keep_saved_name(void);
 
 static jmp_buf boot_rom;
 /* the name EDIT NAME saved; kept over emu_init like the badge's flash */
 static name_t flash_name;
 static bool has_flash_name;
+/* the stage (store.h), also kept like the flash; the emulator starts as a
+ * badge that has been through the factory test and the sponsor reel */
+static stage_t flash_stage = STAGE_DONE;
 
 /* app.c shows the USB boot screen for a second, then calls this */
 void reboot_to_boot_rom(void)
@@ -43,7 +47,13 @@ EXPORT void emu_init(void)
     else
         name_default(&name);
     app_init(&name);
+    if (flash_stage == STAGE_NEW)
+        app_factory();
+    else if (flash_stage == STAGE_TESTED)
+        app_sponsors();
 }
+/* as if just flashed: the factory test, then the sponsor reel */
+EXPORT void emu_fresh(void) { flash_stage = STAGE_NEW; }
 EXPORT uint8_t emu_brightness(void) { return app_brightness(); }
 
 EXPORT void emu_event(uint8_t kind, uint8_t arg)
@@ -74,8 +84,7 @@ EXPORT uint32_t emu_render(uint8_t held, uint8_t *out)
         emu_ir_rx(ir_echo, n);
     }
     app_render(held);
-    if (app_saved_name(&flash_name))
-        has_flash_name = true;
+    keep_saved_name();
     for (int r = 0; r < GRID_H; r++)
         for (int c = 0; c < GRID_W; c++)
             *out++ = GRID[r][c] == SLOT_NONE ? 0 : fb[GRID[r][c]];
@@ -92,10 +101,13 @@ EXPORT uint32_t emu_render(uint8_t held, uint8_t *out)
 static void keep_saved_name(void)
 {
     name_t name;
+    stage_t stage;
     if (app_saved_name(&name)) { /* SET NAME: "flash" it, like main.c */
         flash_name = name;
         has_flash_name = true;
     }
+    if (app_stage(&stage) && stage > flash_stage)
+        flash_stage = stage;
 }
 
 EXPORT int emu_usb(const uint8_t *in, int len, uint8_t *out)

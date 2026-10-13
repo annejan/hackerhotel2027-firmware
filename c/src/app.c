@@ -14,13 +14,17 @@
  * buttons (see games/).
  * Infrared: B on the name tag sends the name (HELLO). A badge that gets a
  * HELLO greets the sender ("HI" and the name) and answers with its own
- * name (REPLY), which greets back; so one press swaps names. */
+ * name (REPLY), which greets back; so one press swaps names.
+ * A freshly flashed badge starts with the factory test (factory.c), and
+ * the boot after it passed with the sponsor reel (sponsors.c); main.c
+ * keeps track of that in flash through app_stage(). */
 #include <stdbool.h>
 #include <string.h>
 #include "anim.h"
 #include "app.h"
 #include "bootloader.h"
 #include "editor.h"
+#include "factory.h"
 #include "font.h"
 #include "frame.h"
 #include "game.h"
@@ -29,6 +33,7 @@
 #include "log.h"
 #include "nametag.h"
 #include "selftest.h"
+#include "sponsors.h"
 
 enum {
     NAME,
@@ -65,6 +70,10 @@ static struct {
     name_t name;
     bool editing;
     bool testing;   /* the bring-up test has the screen and the buttons */
+    bool factory;   /* so has the factory test */
+    bool reel;      /* the sponsor reel; a tap ends it */
+    bool has_stage; /* `stage` waits for main.c to keep it in flash */
+    stage_t stage;
     bool has_saved; /* `saved` waits for main.c to keep it in flash */
     name_t saved;
     /* infrared */
@@ -75,6 +84,8 @@ static struct {
     name_t greet;      /* the other badge's name */
     uint16_t met;      /* HELLOs and REPLYs since power on */
 } a;
+
+static void reel_done(void);
 
 static bool is_game(int i)
 {
@@ -154,6 +165,18 @@ void app_event(event_t ev, uint8_t arg)
         app_selftest();
         return;
     }
+    if (ev == EV_CHARGING)
+        a.charging = arg;
+    if (a.factory) {
+        if (ev != EV_CHARGING)
+            factory_event(ev, arg);
+        return;
+    }
+    if (a.reel) {
+        if (ev == EV_TAP)
+            reel_done();
+        return;
+    }
     if (a.testing && ev != EV_CHARGING) {
         if (!selftest_event(ev, arg)) {
             a.testing = false;
@@ -162,7 +185,6 @@ void app_event(event_t ev, uint8_t arg)
         return;
     }
     if (ev == EV_CHARGING) {
-        a.charging = arg;
         a.show_charge = arg && !(is_game(a.item) && game_playing()) && !a.menu && !a.editing && !a.testing;
         return;
     }
@@ -242,9 +264,52 @@ static void draw_menu(uint32_t t)
 
 void app_selftest(void)
 {
-    a.menu = a.editing = a.show_charge = a.greeting = false;
+    a.menu = a.editing = a.show_charge = a.greeting = a.factory = a.reel = false;
     a.testing = true;
     selftest_start();
+}
+
+static void set_stage(stage_t stage)
+{
+    a.stage = stage;
+    a.has_stage = true;
+}
+
+bool app_stage(stage_t *out)
+{
+    if (!a.has_stage)
+        return false;
+    *out = a.stage;
+    a.has_stage = false;
+    return true;
+}
+
+void app_factory(void)
+{
+    a.menu = a.editing = a.show_charge = a.greeting = a.testing = a.reel = false;
+    a.factory = true;
+    factory_start();
+}
+
+void app_factory_skip(void)
+{
+    log_line("factory test: skipped");
+    set_stage(STAGE_TESTED);
+}
+
+void app_sponsors(void)
+{
+    a.menu = a.editing = a.show_charge = a.greeting = a.testing = a.factory = false;
+    a.reel = true;
+    log_line("sponsor reel");
+    sponsors_start();
+}
+
+static void reel_done(void)
+{
+    a.reel = false;
+    set_stage(STAGE_DONE);
+    select_item(NAME);
 }
 
 bool app_ir_hello(void)
@@ -262,6 +327,8 @@ void app_ir_received(uint8_t type, const uint8_t *data, int len)
     if (type == IR_TEST) {
         if (a.testing)
             selftest_ir(data, len);
+        else if (a.factory)
+            factory_ir();
         return;
     }
     if (type != IR_HELLO && type != IR_REPLY)
@@ -314,7 +381,7 @@ static void ir_tick(void)
         else
             a.reply_in = 1; /* still sending something: next frame */
     }
-    bool busy = a.menu || a.editing || a.testing || (is_game(a.item) && game_playing());
+    bool busy = a.menu || a.editing || a.testing || a.factory || a.reel || (is_game(a.item) && game_playing());
     if (a.greet_pending && !busy) {
         a.greet_pending = false;
         a.greeting = true;
@@ -340,6 +407,21 @@ void app_render(uint8_t held)
     if (a.testing) {
         selftest_render(held);
         return;
+    }
+    if (a.factory) {
+        factory_t r = factory_render(held);
+        if (r == FACTORY_PASSED)
+            set_stage(STAGE_TESTED);
+        else if (r == FACTORY_DONE) {
+            a.factory = false;
+            select_item(NAME);
+        }
+        return;
+    }
+    if (a.reel) {
+        if (sponsors_render())
+            return;
+        reel_done();
     }
     if (a.menu) {
         if (++a.idle > MENU_TIMEOUT)

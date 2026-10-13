@@ -54,7 +54,7 @@ void console_line(const char *line)
     while (*line == ' ')
         line++;
     if (is(line, "help", &arg)) {
-        log_line("info | name TEXT | show N | level N | hello | test");
+        log_line("info | name TEXT | show N | level N | hello | test | factory [skip] | sponsors");
         for (int i = 0; i < app_items(); i++) {
             log_str("  ");
             log_u32((uint32_t)i);
@@ -75,6 +75,13 @@ void console_line(const char *line)
         info();
     } else if (is(line, "test", &arg)) {
         app_selftest();
+    } else if (is(line, "factory", &arg)) {
+        if (is(arg, "skip", &arg))
+            app_factory_skip();
+        else
+            app_factory();
+    } else if (is(line, "sponsors", &arg)) {
+        app_sponsors();
     } else if (is(line, "hello", &arg)) {
         if (!app_ir_hello())
             log_line("ir: busy");

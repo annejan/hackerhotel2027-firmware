@@ -52,3 +52,8 @@ void emu_ir_rx(const uint8_t *in, int len);
 /* Optional: one line for the UART console (console.h, console.rs).
  * The firmware's log goes to stderr. */
 void emu_console(const char *line);
+
+/* Optional: forget the badge's progress, as if freshly flashed: the next
+ * emu_init starts the factory test, the boot after it passed plays the
+ * sponsor reel. (By default the emulator is a badge past both.) */
+void emu_fresh(void);

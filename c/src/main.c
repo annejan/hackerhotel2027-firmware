@@ -58,12 +58,17 @@ int main(void)
     if (!store_load(&name))
         name_default(&name);
     app_init(&name);
+    stage_t stage = store_stage();
     usb_init();
     uart_init();
     ir_init();
     log_str("\r\nhh27 starfish badge, c firmware. Name: ");
     log_line(name.s);
     log_line("Type help.");
+    if (stage == STAGE_NEW)
+        app_factory();
+    else if (stage == STAGE_TESTED)
+        app_sponsors();
 
     uint32_t next_buttons = ticks(), next_chrg = ticks(), next_frame = ticks();
     int charging = -1;
@@ -87,5 +92,7 @@ int main(void)
             log_str("name saved: ");
             log_line(name.s);
         }
+        if (app_stage(&stage) && stage > store_stage())
+            store_set_stage(stage); /* only forward: a re-run test does not bring the reel back */
     }
 }

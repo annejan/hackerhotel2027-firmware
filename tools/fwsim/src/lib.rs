@@ -19,6 +19,8 @@ pub mod selftest;
 pub mod app;
 #[path = "../../../src/editor.rs"]
 pub mod editor;
+#[path = "../../../src/factory.rs"]
+pub mod factory;
 #[path = "../../../src/font.rs"]
 pub mod font;
 #[path = "../../../src/frame.rs"]
@@ -33,6 +35,8 @@ pub mod generated;
 pub mod nametag;
 #[path = "../../../src/proto.rs"]
 pub mod proto;
+#[path = "../../../src/sponsors.rs"]
+pub mod sponsors;
 
 use std::ffi::c_char;
 use std::sync::Mutex;
@@ -101,6 +105,26 @@ fn flush_log() {
 static EMU: Mutex<Option<Emu>> = Mutex::new(None);
 /// The name EDIT NAME saved; kept over emu_init like the badge's flash.
 static FLASH_NAME: Mutex<Option<nametag::Name>> = Mutex::new(None);
+/// The stage, also kept like the flash; the emulator starts as a badge
+/// that has been through the factory test and the sponsor reel.
+static FLASH_STAGE: Mutex<app::Stage> = Mutex::new(app::Stage::Done);
+
+/// What main.rs keeps in flash: a saved name, and the stage going forward.
+fn keep_flash(app: &mut app::App) {
+    if let Some(name) = app.saved_name() {
+        *FLASH_NAME.lock().unwrap() = Some(name);
+    }
+    if let Some(stage) = app.stage() {
+        let mut kept = FLASH_STAGE.lock().unwrap();
+        *kept = (*kept).max(stage);
+    }
+}
+
+/// As if just flashed: the next emu_init starts the factory test.
+#[no_mangle]
+pub extern "C" fn emu_fresh() {
+    *FLASH_STAGE.lock().unwrap() = app::Stage::New;
+}
 
 #[no_mangle]
 pub extern "C" fn emu_abi() -> u32 {
@@ -120,8 +144,14 @@ pub extern "C" fn emu_fps() -> u32 {
 #[no_mangle]
 pub extern "C" fn emu_init() {
     let name = FLASH_NAME.lock().unwrap().unwrap_or_default();
+    let mut app = app::App::new(name);
+    match *FLASH_STAGE.lock().unwrap() {
+        app::Stage::New => app.factory(),
+        app::Stage::Tested => app.sponsors(),
+        app::Stage::Done => {}
+    }
     *EMU.lock().unwrap() = Some(Emu {
-        app: app::App::new(name),
+        app,
         frame: frame::Frame::new(),
         boot: None,
         rows: 0,
@@ -177,9 +207,7 @@ pub unsafe extern "C" fn emu_render(held: u8, out: *mut u8) -> u32 {
         }
         None => e.app.render(&mut e.frame, held),
     }
-    if let Some(name) = e.app.saved_name() {
-        *FLASH_NAME.lock().unwrap() = Some(name);
-    }
+    keep_flash(&mut e.app);
     // what main.rs's IR task does: take a packet for the "LED"
     if e.ir_out.is_none() {
         if let Some((ty, name)) = e.app.ir_take() {
@@ -257,9 +285,7 @@ pub unsafe extern "C" fn emu_console(line: *const c_char) {
     let Some(e) = emu.as_mut() else { return };
     let line = std::ffi::CStr::from_ptr(line).to_string_lossy();
     console::line(&mut e.app, &line);
-    if let Some(name) = e.app.saved_name() {
-        *FLASH_NAME.lock().unwrap() = Some(name);
-    }
+    keep_flash(&mut e.app);
     drop(emu);
     flush_log();
 }
@@ -282,9 +308,7 @@ pub unsafe extern "C" fn emu_usb(input: *const u8, len: i32, out: *mut u8) -> i3
     let n = proto::handle(&mut e.app, input, &mut reply);
     std::ptr::copy_nonoverlapping(reply.as_ptr(), out, n);
     // SET NAME: "flash" it, as main.rs does
-    if let Some(name) = e.app.saved_name() {
-        *FLASH_NAME.lock().unwrap() = Some(name);
-    }
+    keep_flash(&mut e.app);
     n as i32
 }
 

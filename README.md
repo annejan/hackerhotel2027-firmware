@@ -6,12 +6,14 @@ has never run on a board.
 | | | | | |
 |---|---|---|---|---|
 | ![hotel](docs/fw/hotel.gif) | ![startris](docs/fw/startris.gif) | ![breakout](docs/fw/breakout.gif) | ![star chase](docs/fw/chase.gif) | ![name swap](docs/fw/swap.gif) |
+| ![factory test](docs/fw/factory.gif) | ![sponsor reel](docs/fw/sponsors.gif) | ![bring-up test](docs/fw/selftest.gif) | | |
 | ![ripple](docs/anim/ripple.gif) | ![galaxy](docs/anim/galaxy.gif) | ![fire](docs/anim/fire.gif) | ![heartbeat](docs/anim/heartbeat.gif) | |
 
-Top row: recorded from the firmware itself, running on the PC
+Top two rows: recorded from the firmware itself, running on the PC
 (`tools/fwsim`; the name swap from two C emulators), drawn on a KiCad
-render of the board with the real LED positions. Bottom row: the Python
-animation sketches the firmware ports.
+render of the board with the real LED positions: games and screens, then
+the factory test, the sponsor reel and the bring-up test. Bottom row: the
+Python animation sketches the firmware ports.
 
 ## Using the badge
 
@@ -26,6 +28,7 @@ every game, the name tag and the emulator. The short version:
 | Games | play themselves until you press ◀, ▶ or B |
 | **Hold ◀ + ▶, 3 s** | reboot into the USB boot ROM for flashing |
 | **B** on the name tag | send your name over infrared; a badge that gets it says HI with your name and sends its own back |
+| **First power-on** | a freshly flashed badge runs a 30 s pass / fail factory test for the flashing table, and the power-on after it passed plays the sponsor reel once ([details](docs/USAGE.md#factory-test-the-flashing-table)) |
 | **Hold A + B, 3 s** | bring-up test for a new board: COM / PWM / LED walks with designators on the UART, scan rate, IR loopback, power ([details](docs/USAGE.md#bring-up-test-first-boards)) |
 
 ◀ and ▶ are the two buttons on the front of the lower legs (thumbs), A and
@@ -75,7 +78,8 @@ receiver has no supply on the current board.
 
 **UART console.** The UART header J3 (115200 8N1) prints a log (boot,
 names saved, IR packets) and takes commands: `help`, `info`,
-`name TEXT`, `show N`, `level N`, `hello`, `test`.
+`name TEXT`, `show N`, `level N`, `hello`, `test`, `factory`,
+`sponsors`.
 
 Both work in the emulator: every emulator on a PC shares one infrared
 "room" (UDP broadcast on 127.255.255.255:8028), so start two and press B
@@ -174,7 +178,7 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `app.rs` | Menu, the list of screens, brightness, charging overlay |
 | `nametag.rs` | Name tag and Hacker Hotel 2027 screens, the `Name` type |
 | `editor.rs` | Name entry on the badge (EDIT NAME) |
-| `store.rs` | The name in flash (last 256-byte page; `memory.x` keeps code out of it) |
+| `store.rs` | The name and the first-boot stage in flash (last 256-byte page; `memory.x` keeps code out of it) |
 | `anim.rs` | Animations: ripple, galaxy, heartbeat, life, fire, twinkle, charging |
 | `game.rs` | Game shell: demo mode, play, crash, score screen |
 | `games/` | Snake, Startris, Breakout, Pong, Flappy, Star Chase |
@@ -187,6 +191,8 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `ir.rs`, `irproto.rs` | Infrared: TIM1 carrier, TIM3 timing, TIM2 capture; packets and pulse decoder |
 | `uart.rs`, `console.rs`, `log.rs` | UART header: the log out, console commands in |
 | `selftest.rs` | Bring-up test for new boards |
+| `factory.rs` | Factory test for the flashing table (first power-on until it passes) |
+| `sponsors.rs` | Sponsor reel (the power-on after the factory test), with the sponsor table |
 
 `c/` has a port of the same firmware to plain C (register level, no WCH
 peripheral library), for comparison; see `c/README.md` and the sizes below.
@@ -195,8 +201,9 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 
 | | |
 |---|---|
-| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it; C emulators share infrared, stdin is the UART console |
+| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it; `--fresh` starts as a freshly flashed badge (factory test, then sponsor reel); emulators share infrared, stdin is the UART console |
 | `tools/fwsim` | `cargo test` checks the name editor. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random presses in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
+| `tools/sim/logo.py` | Turns a picture into a sponsor logo for the grid (rows for `sponsors.c` / `sponsors.rs`) |
 | `tools/sim/fwgif.py` | Turns a `fwsim record` (or frames from the C emulator library) into a GIF on the board render |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
 | `tools/sim/games.py` | The first game mock-ups, played by a scripted AI |
@@ -208,17 +215,20 @@ The Python tools need numpy, scipy, Pillow and ffmpeg.
 
 Everything above (name tag and name entry, hotel screen, menu, 6
 animations, 6 games, the USB boot gesture, the USB device, the infrared
-name swap, the UART console and the bring-up test), measured. The last 256 bytes of
-flash are kept for the saved name.
+name swap, the UART console, the bring-up test, the factory test and the
+sponsor reel), measured. The last 256 bytes of flash are kept for the
+saved name and the first-boot stage.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **32.0 KB** (52%) | 6.4 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` | 45.4 KB (73%) | 4.7 KB + stack |
-| Rust + Embassy, `opt-level = "s"` (default) | **49.8 KB** (80%) | 4.7 KB + stack |
+| C, GCC 15 `-Os` | **34.5 KB** (56%) | 6.5 KB + 2 KB stack |
+| Rust + Embassy, `opt-level = "z"` (default) | **48.1 KB** (78%) | 4.7 KB + stack |
+| Rust + Embassy, `opt-level = "s"` | 53.2 KB (86%) | 4.7 KB + stack |
 
-Rust is getting close to full: if more is added there, switch the release
-profile to `opt-level = "z"` first.
+Rust builds with `opt-level = "z"` since the factory test: with `"s"` it
+would be at 86%. The factory test and the sponsor reel cost 3.3 KB in C
+(the test 2.4 KB, a third of it the volunteers' hints in the log; the reel
+0.65 KB without logos) and 3.9 KB in Rust. A logo is 64 bytes.
 
 Roughly where the C flash goes: animations 4.0 KB, the app (menu, USB
 settings, infrared greeting) 3.4 KB, Startris 2.5 KB, LED tables 2.2 KB,

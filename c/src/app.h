@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "events.h"
 #include "nametag.h"
+#include "store.h"
 
 /* name: the name kept in flash, or name_default() */
 void app_init(const name_t *name);
@@ -32,3 +33,12 @@ void app_ir_received(uint8_t type, const uint8_t *data, int len);
 bool app_ir_hello(void);
 /* the bring-up test (selftest.h), as A + B held for 3 s starts it */
 void app_selftest(void);
+/* the factory test (factory.h): main.c starts it on a new badge, the
+ * console with `factory` */
+void app_factory(void);
+/* mark the factory test as passed without running it (`factory skip`) */
+void app_factory_skip(void);
+/* the sponsor reel (sponsors.h) */
+void app_sponsors(void);
+/* the stage the badge just reached, once, for main.c to keep in flash */
+bool app_stage(stage_t *out);

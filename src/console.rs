@@ -7,6 +7,8 @@
 //!   level N          brightness 0..4
 //!   hello            send the name over IR, as B on the name tag does
 //!   test             the bring-up test (selftest.rs)
+//!   factory [skip]   the factory test (factory.rs); skip marks it passed
+//!   sponsors         the sponsor reel (sponsors.rs)
 
 use crate::app::App;
 use crate::log;
@@ -46,7 +48,7 @@ fn info(app: &App) {
 pub fn line(app: &mut App, line: &str) {
     let line = line.trim_start();
     if arg(line, "help").is_some() {
-        log::line("info | name TEXT | show N | level N | hello | test");
+        log::line("info | name TEXT | show N | level N | hello | test | factory [skip] | sponsors");
         for i in 0..App::items() {
             log::text("  ");
             log::num(i as u32);
@@ -69,6 +71,14 @@ pub fn line(app: &mut App, line: &str) {
         info(app);
     } else if arg(line, "test").is_some() {
         app.selftest();
+    } else if let Some(rest) = arg(line, "factory") {
+        if arg(rest, "skip").is_some() {
+            app.factory_skip();
+        } else {
+            app.factory();
+        }
+    } else if arg(line, "sponsors").is_some() {
+        app.sponsors();
     } else if arg(line, "hello").is_some() {
         if !app.ir_hello() {
             log::line("ir: busy");

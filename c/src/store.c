@@ -1,10 +1,12 @@
 /* The name in flash, same as ../../src/store.rs. NOT TESTED ON HARDWARE.
  *
  * The last 256-byte page of the code flash (0x0800F700) holds a magic word,
- * a length and the name. The Makefile links with a copy of WCH's Link.ld
+ * a length and the name, and in its last word the stage (store.h). Saving
+ * one keeps the other. The Makefile links with a copy of WCH's Link.ld
  * whose code flash ends one page early, so the firmware can never be placed
- * there; flashing a new firmware with wchisp erases the whole code flash,
- * name included.
+ * there. `wchisp flash` only erases the sectors the new firmware needs (plus
+ * one), so the name and the stage survive an update; `wchisp erase` clears
+ * them.
  *
  * Erase and program follow WCH's FLASH_ROM_ERASE / FLASH_ROM_WRITE
  * (ch643_flash.c, 256-byte "fast" pages): unlock with the flash and the
@@ -15,6 +17,9 @@
 
 #define PAGE 0x0800F700u
 #define MAGIC 0x4E414D45u /* "NAME" */
+#define STAGE_WORD 63
+#define TESTED 0x54455354u /* "TEST" */
+#define DONE 0x444F4E45u   /* "DONE"; anything else, erased too, is new */
 
 #define KEY1 0x45670123u
 #define KEY2 0xCDEF89ABu
@@ -57,18 +62,8 @@ static void ctlr(uint32_t set, uint32_t clear)
     FLASH->CTLR = (FLASH->CTLR & ~clear) | set;
 }
 
-void store_save(const name_t *name)
+static void program(const uint32_t *page)
 {
-    uint32_t page[64];
-    for (int i = 0; i < 64; i++)
-        page[i] = 0xFFFFFFFFu;
-    page[0] = MAGIC;
-    page[1] = name->len;
-    for (int i = 0; i < name->len; i++) {
-        uint32_t *w = &page[2 + i / 4];
-        *w = (*w & ~(0xFFu << (8 * (i % 4)))) | (uint32_t)(uint8_t)name->s[i] << (8 * (i % 4));
-    }
-
     FLASH->KEYR = KEY1;
     FLASH->KEYR = KEY2;
     FLASH->MODEKEYR = KEY1; /* fast (page) mode */
@@ -94,4 +89,34 @@ void store_save(const name_t *name)
     ctlr(0, CR_PAGE_PG);
 
     ctlr(CR_FLOCK | CR_LOCK, 0);
+}
+
+void store_save(const name_t *name)
+{
+    uint32_t page[64];
+    for (int i = 0; i < 64; i++)
+        page[i] = 0xFFFFFFFFu;
+    page[0] = MAGIC;
+    page[1] = name->len;
+    for (int i = 0; i < name->len; i++) {
+        uint32_t *w = &page[2 + i / 4];
+        *w = (*w & ~(0xFFu << (8 * (i % 4)))) | (uint32_t)(uint8_t)name->s[i] << (8 * (i % 4));
+    }
+    page[STAGE_WORD] = word(STAGE_WORD);
+    program(page);
+}
+
+stage_t store_stage(void)
+{
+    uint32_t w = word(STAGE_WORD);
+    return w == DONE ? STAGE_DONE : w == TESTED ? STAGE_TESTED : STAGE_NEW;
+}
+
+void store_set_stage(stage_t stage)
+{
+    uint32_t page[64];
+    for (int i = 0; i < 64; i++)
+        page[i] = word(i);
+    page[STAGE_WORD] = stage == STAGE_DONE ? DONE : stage == STAGE_TESTED ? TESTED : 0xFFFFFFFFu;
+    program(page);
 }

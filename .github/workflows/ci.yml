@@ -1,0 +1,102 @@
+# Builds both firmwares, checks they still fit, and runs the host tests.
+# Network: the C build fetches WCH's SDK (github.com/openwch/ch643, pinned
+# in c/Makefile), the Rust build fetches crates.io (Cargo.lock) and the
+# toolchain in rust-toolchain.toml, and the C job downloads the xPack GCC. Generated files (src/generated.rs, c/src/generated.{c,h}, the logos)
+# are not regenerated here: gen_layout.py needs KiCad's pcbnew and the
+# hardware repo, logo.py needs Inkscape.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # the code flash is 63232 bytes (62 KiB less the settings page), but
+  # `wchisp flash` erases one 1 KiB sector past the image: from 61440 bytes
+  # on, every update would wipe the name, progress and first-boot stage
+  RUST_FLASH_LIMIT: 61440
+  C_FLASH_LIMIT: 61440
+  XPACK_GCC: 15.2.0-1
+
+jobs:
+  firmware-c:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: xPack RISC-V GCC, riscv-none-elf- as c/Makefile expects
+        id: gcc-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/xpack
+          key: xpack-riscv-none-elf-gcc-${{ env.XPACK_GCC }}
+      - if: steps.gcc-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/xpack
+          curl -fsSL https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v$XPACK_GCC/xpack-riscv-none-elf-gcc-$XPACK_GCC-linux-x64.tar.gz \
+            | tar -xz -C ~/xpack
+      - run: echo "$HOME/xpack/xpack-riscv-none-elf-gcc-$XPACK_GCC/bin" >> "$GITHUB_PATH"
+      - name: WCH SDK
+        uses: actions/cache@v4
+        with:
+          path: c/vendor
+          key: wch-sdk-${{ hashFiles('c/Makefile') }}
+      - name: Build
+        run: make -C c
+      - name: Flash size
+        run: |
+          echo "| firmware | flash bytes | of 63232 | static RAM | limit |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          SIZE=riscv-none-elf-size tools/ci/check_size.sh c/build/hh27.elf "$C_FLASH_LIMIT" C
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hh27-c
+          path: |
+            c/build/hh27.elf
+            c/build/hh27.bin
+            c/build/hh27.map
+      - name: Build with a long name
+        run: make -C c clean all NAME="ABCDEFGHIJKLMNOPQRSTUVWX"
+
+  firmware-rust:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --locked
+      - name: Flash size
+        run: |
+          echo "| firmware | flash bytes | of 63232 | static RAM | limit |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          tools/ci/check_size.sh target/riscv32imc-unknown-none-elf/release/hh27-starfish "$RUST_FLASH_LIMIT" Rust
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hh27-rust
+          path: target/riscv32imc-unknown-none-elf/release/hh27-starfish
+
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/fwsim
+      - name: C host tests (ASan, UBSan)
+        run: make -C c test
+      - name: fwsim tests (Rust modules on the PC)
+        working-directory: tools/fwsim
+        run: cargo test --locked
+      - name: fwsim soak, debug build with overflow and bounds checks
+        working-directory: tools/fwsim
+        run: cargo run --locked -- soak 5000
+      - name: Emulator libraries
+        run: |
+          make -C c emu
+          (cd tools/fwsim && cargo build --release --locked --lib)
+      - name: C / Rust parity
+        run: python3 tools/emu/parity.py c/build/libhh27.so tools/fwsim/target/*/release/libfwsim.so

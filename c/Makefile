@@ -4,6 +4,7 @@
 #   make size       section sizes
 #   make flash      flash over USB with wchisp (boot ROM, see ../README.md)
 #   make emu        build/libhh27.so for the PC emulator (tools/emu)
+#   make test       host tests under ASan/UBSan (test/, see test/Makefile)
 #
 # Uses only startup, linker script, clock init and register headers from
 # WCH's SDK (github.com/openwch/ch643); no peripheral library, no libc.
@@ -89,4 +90,16 @@ build/libhh27.so: $(EMU_SRCS) $(wildcard src/*.h) ../tools/emu/badge_emu.h | bui
 	$(HOSTCC) -std=gnu11 -O2 -g -Wall -Wextra -fPIC -shared -fvisibility=hidden -Isrc \
 	    $(if $(NAME),-DBADGE_NAME='"$(NAME)"') $(EMU_SRCS) -o $@
 
-.PHONY: all size flash clean emu
+# NAME is baked into nametag.c: rebuild it (and the emulator library)
+# when NAME changes, not only when a source does
+build/name.txt: FORCE | build
+	@printf '%s\n' '$(NAME)' | cmp -s - $@ || printf '%s\n' '$(NAME)' > $@
+build/nametag.c.o build/libhh27.so: build/name.txt
+FORCE:
+
+# Host tests (test/Makefile): the drivers against fake registers, the app
+# through its interface, a soak through the emulator interface.
+test:
+	$(MAKE) -C test C=$(CURDIR) OUT=$(CURDIR)/build/test HOSTCC=$(HOSTCC)
+
+.PHONY: all size flash clean emu test FORCE

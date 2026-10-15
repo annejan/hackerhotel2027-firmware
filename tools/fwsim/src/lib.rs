@@ -328,10 +328,10 @@ mod tests {
     use super::*;
     use nametag::Name;
 
-    /// Menu -> EDIT NAME, as a user would: hold A, 19 x ▶, tap A.
+    /// Menu -> EDIT NAME, as a user would: hold A, ▶ to it, tap A.
     fn open_editor(a: &mut app::App) {
         a.handle(Event::Hold(2));
-        for _ in 0..19 {
+        for _ in 0..item_of("EDIT NAME") {
             a.handle(Event::Tap(3));
         }
         a.handle(Event::Tap(2));
@@ -486,6 +486,44 @@ mod tests {
                 a.render(&mut f, 0);
             }
         }
+    }
+
+    fn item_of(label: &str) -> usize {
+        (0..app::App::items()).find(|&i| app::App::label(i) == label).expect(label)
+    }
+
+    #[test]
+    fn console_commands() {
+        let mut a = app::App::new(Name::new(b"ME"));
+        console::line(&mut a, "  show 3");
+        assert_eq!(a.item(), 3);
+        let edit = format!("show {}", item_of("EDIT NAME"));
+        let light = format!("show {}", item_of("LIGHT"));
+        for bad in ["show", "show x", "show 3x", "show -1", "show 21", "show 99999", "showx 1", "", "HELP", &edit, &light] {
+            console::line(&mut a, bad);
+            assert_eq!(a.item(), 3, "{bad:?} changed the item");
+        }
+        console::line(&mut a, "level 4");
+        assert_eq!((a.level(), a.brightness()), (4, 255));
+        console::line(&mut a, "level 5");
+        assert_eq!(a.level(), 4, "level 5 is refused");
+        console::line(&mut a, "name  bob the builder");
+        assert_eq!(a.saved_name().unwrap().as_str(), "BOB THE BUILDER");
+        console::line(&mut a, "factoryskip");
+        assert!(a.stage().is_none());
+        console::line(&mut a, "factory skip");
+        assert!(matches!(a.stage(), Some(app::Stage::Tested)));
+    }
+
+    /// ◀ / ▶ outside the menu skip EDIT NAME and LIGHT, also from VICTORY
+    #[test]
+    fn browse_skips_menu_only_items() {
+        let mut a = app::App::new(Name::new(b"ME"));
+        a.handle(Event::Tap(0));
+        assert_eq!(a.item(), item_of("VICTORY"));
+        a.handle(Event::Press(3));
+        a.handle(Event::Tap(3));
+        assert_eq!(a.item(), 0, "VICTORY -> NAME");
     }
 
     #[test]

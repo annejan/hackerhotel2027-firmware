@@ -1,0 +1,6 @@
+# Pinned: code size changes between compiler releases, and the Rust build
+# has to fit 62 KB of flash (CI checks it against a limit).
+[toolchain]
+channel = "1.98.0"
+targets = ["riscv32imc-unknown-none-elf"]
+profile = "minimal"

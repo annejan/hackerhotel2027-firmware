@@ -74,7 +74,7 @@ impl Play for Hilo {
     fn draw(&self, f: &mut Frame, t: u32) {
         let n = if self.showing { self.next } else { self.now };
         let digits = [b'0' + n / 10, b'0' + n % 10];
-        let s = core::str::from_utf8(if n >= 10 { &digits } else { &digits[1..] }).unwrap_or("");
+        let s = crate::log::ascii(if n >= 10 { &digits } else { &digits[1..] });
         draw_text(f, s, (GRID_W - text_width(s)) as i32 / 2, 4, 255);
         // the streak, 5 outline LEDs a point
         for (j, &e) in EDGE.iter().enumerate() {

@@ -1,4 +1,4 @@
-//! A small debug log: text goes into a ring buffer that the UART task
+//! A small debug log: text goes into a ring buffer that the UART poll
 //! (uart.rs) sends out on the badge, and that the PC simulator prints.
 //! Never blocks; what does not fit is dropped.
 
@@ -41,7 +41,7 @@ pub fn num(mut n: u32) {
             break;
         }
     }
-    text(core::str::from_utf8(&b[i..]).unwrap_or(""));
+    text(crate::log::ascii(&b[i..]));
 }
 
 /// `s`, then a line end.
@@ -61,4 +61,14 @@ pub fn pop() -> Option<u8> {
         r.tail = (r.tail + 1) % SIZE;
         Some(b)
     })
+}
+
+/// Bytes the firmware itself made (font characters, digits, typed ASCII)
+/// as a str, without core's UTF-8 validator: non-ASCII becomes "".
+pub fn ascii(b: &[u8]) -> &str {
+    if b.is_ascii() {
+        unsafe { core::str::from_utf8_unchecked(b) }
+    } else {
+        ""
+    }
 }

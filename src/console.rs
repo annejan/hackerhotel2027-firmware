@@ -25,7 +25,7 @@ fn arg<'a>(line: &'a str, word: &str) -> Option<&'a str> {
     if !rest.is_empty() && !rest.starts_with(' ') {
         return None;
     }
-    Some(rest.trim_start())
+    Some(rest.trim_ascii_start())
 }
 
 fn number(s: &str) -> Option<usize> {
@@ -48,7 +48,7 @@ fn info(app: &App) {
 }
 
 pub fn line(app: &mut App, line: &str) {
-    let line = line.trim_start();
+    let line = line.trim_ascii_start();
     if arg(line, "help").is_some() {
         log::line("info | name TEXT | show N | level N | hello | test | factory [skip] | sponsors | progress");
         for i in 0..App::items() {

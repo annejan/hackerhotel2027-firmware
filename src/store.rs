@@ -12,9 +12,8 @@
 //! fast-mode keys, erase the page, fill the page buffer word by word,
 //! program, lock.
 
-use ch32_hal as hal;
 use core::ptr::{read_volatile, write_volatile};
-use hal::pac::FLASH;
+use crate::pac::FLASH;
 
 use crate::app::Stage;
 use crate::nametag::{Name, MAX};

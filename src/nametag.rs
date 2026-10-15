@@ -38,7 +38,7 @@ impl Name {
 
     pub fn as_str(&self) -> &str {
         // only ASCII ' '..='Z' is ever stored
-        core::str::from_utf8(&self.buf[..self.len]).unwrap_or("")
+        crate::log::ascii(&self.buf[..self.len])
     }
 
     pub fn bytes(&self) -> &[u8] {

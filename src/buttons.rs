@@ -11,34 +11,20 @@
 //! bit i of `held()`): ◀ / ▶ step and steer, A selects (hold: menu), B goes
 //! back or drops.
 
-use embassy_time::{Duration, Ticker};
-use hal::gpio::Input;
-
-use ch32_hal as hal;
-
-use core::sync::atomic::{AtomicU8, Ordering};
-
-use crate::{Event, EVENTS};
-
-/// Buttons down right now, bit n = button index n (load/store only: no CAS
-/// on this core without the A extension in the target).
-static HELD: AtomicU8 = AtomicU8::new(0);
-
-pub fn held() -> u8 {
-    HELD.load(Ordering::Relaxed)
-}
+use crate::pac::{GPIOB, GPIOC};
+use crate::Event;
 
 pub const BUTTONS: usize = 4;
-const POLL_MS: u64 = 10;
+pub const POLL_MS: u32 = 10;
 /// A change has to be seen on this many polls in a row (contact bounce).
 const DEBOUNCE: u8 = 2;
-pub const HOLD_MS: u64 = 600;
+pub const HOLD_MS: u32 = 600;
 const HOLD_TICKS: u16 = (HOLD_MS / POLL_MS) as u16;
 /// Hold these two (◀ + ▶) together this long to reboot into the USB boot ROM.
 pub const BOOT_CHORD: (usize, usize) = (0, 3);
 /// And these two (A + B) for the bring-up test.
 pub const TEST_CHORD: (usize, usize) = (2, 1);
-pub const BOOT_MS: u64 = 3000;
+pub const BOOT_MS: u32 = 3000;
 const BOOT_TICKS: u16 = (BOOT_MS / POLL_MS) as u16;
 
 #[derive(Default)]
@@ -54,19 +40,40 @@ struct Button {
     ticks: u16,
 }
 
-/// `pins` in index order: ◀ (PC5), B (PB20), A (PC4), ▶ (PB18), as floating
-/// inputs (the pull-ups are on the board).
-#[embassy_executor::task]
-pub async fn scan(pins: [Input<'static>; BUTTONS]) {
-    let mut buttons: [Button; BUTTONS] = Default::default();
-    let mut ticker = Ticker::every(Duration::from_millis(POLL_MS));
-    loop {
-        for (i, (b, pin)) in buttons.iter_mut().zip(pins.iter()).enumerate() {
+/// Pin of each button, in index order: ◀ PC5, B PB20, A PC4, ▶ PB18.
+/// (port, pin): false = GPIOC, true = GPIOB.
+const PINS: [(bool, u32); BUTTONS] = [(false, 5), (true, 20), (false, 4), (true, 18)];
+
+pub struct Buttons {
+    buttons: [Button; BUTTONS],
+    /// Buttons down right now, bit n = button index n.
+    held: u8,
+}
+
+impl Buttons {
+    /// The four pins as floating inputs (0b0100; the pull-ups are on the
+    /// board). Their ports' clocks are on already (main::clock_init).
+    pub fn new() -> Self {
+        GPIOC.cfglr().modify(|w| w.0 = (w.0 & !(0xFF << 16)) | 0x44 << 16); // PC4, PC5
+        GPIOB.cfgxr().modify(|w| w.0 = (w.0 & !(0xF << 16 | 0xF << 8)) | 0x4 << 16 | 0x4 << 8); // PB20, PB18
+        Self { buttons: Default::default(), held: 0 }
+    }
+
+    pub fn held(&self) -> u8 {
+        self.held
+    }
+
+    /// Call every `POLL_MS`; sends Press/Tap/Hold/Bootloader/Selftest.
+    pub fn poll(&mut self, mut send: impl FnMut(Event)) {
+        let (b_in, c_in) = (GPIOB.indr().read().0, GPIOC.indr().read().0);
+        let buttons = &mut self.buttons;
+        for (i, (b, &(port_b, pin))) in buttons.iter_mut().zip(PINS.iter()).enumerate() {
+            let low = (if port_b { b_in } else { c_in }) & 1 << pin == 0;
             b.released = false;
             if b.down {
                 b.ticks = b.ticks.saturating_add(1);
             }
-            if pin.is_low() == b.down {
+            if low == b.down {
                 b.bounce = 0;
             } else {
                 b.bounce += 1;
@@ -75,7 +82,7 @@ pub async fn scan(pins: [Input<'static>; BUTTONS]) {
                     b.down = !b.down;
                     if b.down {
                         b.ticks = 0;
-                        let _ = EVENTS.try_send(Event::Press(i as u8));
+                        send(Event::Press(i as u8));
                     } else {
                         b.released = true;
                     }
@@ -83,7 +90,7 @@ pub async fn scan(pins: [Input<'static>; BUTTONS]) {
             }
         }
 
-        HELD.store(buttons.iter().enumerate().fold(0, |m, (i, b)| m | (b.down as u8) << i), Ordering::Relaxed);
+        self.held = buttons.iter().enumerate().fold(0, |m, (i, b)| m | (b.down as u8) << i);
 
         if buttons.iter().filter(|b| b.down).count() > 1 {
             buttons.iter_mut().filter(|b| b.down).for_each(|b| b.chord = true);
@@ -91,21 +98,19 @@ pub async fn scan(pins: [Input<'static>; BUTTONS]) {
         for (i, b) in buttons.iter_mut().enumerate() {
             if b.released {
                 if !b.chord && b.ticks < HOLD_TICKS {
-                    let _ = EVENTS.try_send(Event::Tap(i as u8));
+                    send(Event::Tap(i as u8));
                 }
                 b.chord = false;
             } else if b.down && !b.chord && b.ticks == HOLD_TICKS {
-                let _ = EVENTS.try_send(Event::Hold(i as u8));
+                send(Event::Hold(i as u8));
             }
         }
 
         for (chord, ev) in [(BOOT_CHORD, Event::Bootloader), (TEST_CHORD, Event::Selftest)] {
             let (a, b) = (&buttons[chord.0], &buttons[chord.1]);
             if a.down && b.down && a.ticks.min(b.ticks) == BOOT_TICKS {
-                let _ = EVENTS.try_send(ev);
+                send(ev);
             }
         }
-
-        ticker.next().await;
     }
 }

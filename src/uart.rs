@@ -1,15 +1,17 @@
 //! USART3 on the UART header J3: pin 1 RX (PB17), pin 2 TX (PB16), pin 3
 //! VCC, pin 4 GND; 115200 8N1. Same as `c/src/uart.c`: sends what log.rs
-//! collected and hands typed lines to the console. Polled by a task.
+//! collected and hands typed lines to the console. Polled by the main loop;
+//! input comes in on the RX interrupt into a ring buffer, because a byte
+//! takes 87 us and the USART holds only one.
 //!
 //! USART3_RM = 11 puts TX3 / RX3 on PB16 / PB17 (CH643RM 8.3.2.1; CTS, CK
 //! and RTS would land on PB18, PB22, PB19, but flow control and the clock
 //! output stay off). ch32-data does not know this remap, so this is done
 //! on the registers rather than with the HAL's USART driver.
 
+use core::cell::UnsafeCell;
 use core::ptr::{read_volatile, write_volatile};
-
-use ch32_hal as hal;
+use core::sync::atomic::{AtomicU8, Ordering};
 
 use crate::console::LINE;
 use crate::log;
@@ -27,6 +29,7 @@ const TXE: u16 = 0x0080;
 const RE: u16 = 0x0004;
 const TE: u16 = 0x0008;
 const UE: u16 = 0x2000;
+const RXNEIE: u16 = 0x0020;
 
 const AFIO_PCFR1: usize = 0x4001_0004;
 const GPIOB_CFGXR: usize = 0x4001_0C00 + 0x1C;
@@ -39,6 +42,27 @@ fn wr(off: usize, v: u16) {
     unsafe { write_volatile((USART3 + off) as *mut u16, v) }
 }
 
+const RING: usize = 128; // a whole console line
+struct Ring(UnsafeCell<[u8; RING]>);
+unsafe impl Sync for Ring {}
+// written by the interrupt only, up to RX_HEAD; read by poll() from RX_TAIL
+static RX_RING: Ring = Ring(UnsafeCell::new([0; RING]));
+static RX_HEAD: AtomicU8 = AtomicU8::new(0);
+static RX_TAIL: AtomicU8 = AtomicU8::new(0);
+
+#[qingke_rt::interrupt]
+fn USART3() {
+    while rd(STATR) & (RXNE | ORE) != 0 {
+        let c = rd(DATAR) as u8; // reading DATAR also clears an overrun
+        let head = RX_HEAD.load(Ordering::Relaxed);
+        let next = ((head as usize + 1) % RING) as u8;
+        if next != RX_TAIL.load(Ordering::Acquire) {
+            unsafe { (*RX_RING.0.get())[head as usize] = c };
+            RX_HEAD.store(next, Ordering::Release);
+        } // full: drop it
+    }
+}
+
 pub struct Uart {
     line: [u8; LINE],
     n: usize,
@@ -46,11 +70,11 @@ pub struct Uart {
 
 impl Uart {
     pub fn new() -> Self {
-        hal::pac::RCC.apb2pcenr().modify(|w| {
+        crate::pac::RCC.apb2pcenr().modify(|w| {
             w.set_iopben(true);
             w.set_afioen(true);
         });
-        hal::pac::RCC.apb1pcenr().modify(|w| w.set_usart3en(true));
+        crate::pac::RCC.apb1pcenr().modify(|w| w.set_usart3en(true));
         unsafe {
             let pcfr1 = read_volatile(AFIO_PCFR1 as *const u32);
             write_volatile(AFIO_PCFR1 as *mut u32, pcfr1 | 0b11 << 10);
@@ -59,9 +83,10 @@ impl Uart {
             let cfg = read_volatile(GPIOB_CFGXR as *const u32);
             write_volatile(GPIOB_CFGXR as *mut u32, (cfg & !0xFF) | 0x4B);
         }
-        let hclk = hal::rcc::clocks().hclk.0; // USART3 runs on HCLK
+        let hclk = crate::HCLK; // USART3 runs on HCLK
         wr(BRR, ((hclk + BAUD / 2) / BAUD) as u16);
-        wr(CTLR1, UE | TE | RE);
+        wr(CTLR1, UE | TE | RE | RXNEIE);
+        unsafe { qingke::pfic::enable_interrupt(crate::pac::Interrupt::USART3 as u8) };
         Self { line: [0; LINE], n: 0 }
     }
 
@@ -73,15 +98,18 @@ impl Uart {
                 wr(DATAR, b as u16);
             }
         }
-        while rd(STATR) & (RXNE | ORE) != 0 {
-            let c = rd(DATAR) as u8; // reading DATAR also clears an overrun
+        loop {
+            let tail = RX_TAIL.load(Ordering::Relaxed);
+            if tail == RX_HEAD.load(Ordering::Acquire) {
+                break;
+            }
+            let c = unsafe { (*RX_RING.0.get())[tail as usize] };
+            RX_TAIL.store(((tail as usize + 1) % RING) as u8, Ordering::Release);
             match c {
                 b'\r' | b'\n' => {
                     if self.n > 0 {
                         log::text("\r\n");
-                        if let Ok(s) = core::str::from_utf8(&self.line[..self.n]) {
-                            on_line(s);
-                        }
+                        on_line(log::ascii(&self.line[..self.n]));
                         self.n = 0;
                     }
                 }
@@ -95,7 +123,7 @@ impl Uart {
                     self.line[self.n] = c;
                     self.n += 1;
                     let echo = [c];
-                    log::text(core::str::from_utf8(&echo).unwrap_or(""));
+                    log::text(crate::log::ascii(&echo));
                 }
                 _ => {}
             }

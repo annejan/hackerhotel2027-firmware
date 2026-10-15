@@ -1,5 +1,6 @@
-//! IR send and receive; same packets and timing as `c/src/ir.c`, other
-//! timers: Embassy owns SysTick here.
+//! IR send and receive; same packets and timing as `c/src/ir.c`. SysTick
+//! runs free for the main loop (main.rs `ticks()`), so sending uses TIM3
+//! where the C uses the SysTick compare.
 //!
 //! Send: the LED's anode is on VCC through R37 (200 ohm, about 15 mA) and
 //! its cathode on PB21, so it is on while PB21 is low (hardware commit
@@ -11,12 +12,9 @@
 //! compare value goes through TIM2's preload, so every edge is late by the
 //! same part of a carrier period).
 //!
-//! Receive: the receiver's output on PB19 can only be captured by TIM2
-//! CH4 (TIM2_RM = 100), which the carrier now rules out, and ch32-hal owns
-//! the EXTI interrupts. So TIM1 samples PB19 every 50 us (20 kHz) and its
-//! update interrupt stores how long each mark and space lasted in a ring;
-//! a bit's mark is 560 us and its spaces 560 or 1690 us, so 50 us is
-//! plenty. `poll()` decodes them. The receiver hears our own LED, so
+//! Receive: as in C, an EXTI interrupt on both edges of PB19 (line 19)
+//! stores how long each mark and space lasted, timed with SysTick, in a
+//! ring; `poll()` decodes them. The receiver hears our own LED, so
 //! receiving pauses while we send and for 3 ms after, unless the bring-up
 //! test asks for loopback.
 //!
@@ -24,14 +22,13 @@
 
 use core::cell::UnsafeCell;
 use core::ptr::{read_volatile, write_volatile};
-use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering};
 
-use ch32_hal as hal;
-
-use crate::irproto::{self, Decoder, Sampler, PACKET_MAX};
+use crate::irproto::{self, Decoder, PACKET_MAX};
+use crate::{ticks, ticks_to_us, TICKS_PER_MS};
 
 const CARRIER_HZ: u32 = 38_000;
-const ECHO_US: u16 = 3000;
+const ECHO_MS: u32 = 3;
 
 // register offsets (TIM_TypeDef), 16-bit registers on a 4-byte stride
 const CTLR1: usize = 0x00;
@@ -58,10 +55,15 @@ const CC1E: u16 = 0x0001;
 const CC1P: u16 = 0x0002;
 const MOE: u16 = 0x8000;
 
-const TIM1: usize = 0x4001_2C00;
 const TIM2: usize = 0x4000_0000;
 const TIM3: usize = 0x4000_0400;
 const AFIO_PCFR1: usize = 0x4001_0004;
+const AFIO_EXTICR2: usize = 0x4001_000C; // EXTICR[1]: lines 16..23
+const EXTI: usize = 0x4001_0400;
+const EXTI_INTENR: usize = 0x00;
+const EXTI_RTENR: usize = 0x08;
+const EXTI_FTENR: usize = 0x0C;
+const EXTI_INTFR: usize = 0x14;
 const GPIOB: usize = 0x4001_0C00;
 const GPIO_INDR: usize = 0x08;
 const GPIO_CFGXR: usize = 0x1C;
@@ -69,7 +71,6 @@ const GPIO_BSXR: usize = 0x20;
 
 const LED_PIN: u32 = 21; // PB21, LED cathode: TIM2 CH1, low = LED on
 const RECV_PIN: u32 = 19; // PB19, receiver output, low while it sees carrier
-const SAMPLE_US: u16 = 50; // TIM1 samples PB19 this often
 
 #[inline]
 fn rd(base: usize, off: usize) -> u16 {
@@ -108,12 +109,12 @@ static LOOPBACK: AtomicBool = AtomicBool::new(false);
 static MUTED: AtomicBool = AtomicBool::new(false);
 
 const RING: usize = 128;
-// bit 15 = mark, then microseconds; written by the sampling interrupt only
+// bit 15 = mark, then microseconds; written by the EXTI interrupt only
 static RX_RING: Shared<[u16; RING]> = Shared(UnsafeCell::new([0; RING]));
 static RX_HEAD: AtomicU8 = AtomicU8::new(0);
 static RX_TAIL: AtomicU8 = AtomicU8::new(0);
-static SAMPLER: Shared<Sampler> = Shared(UnsafeCell::new(Sampler::new())); // the TIM1 interrupt's only
-static MUTE_LEFT: AtomicU16 = AtomicU16::new(0); // us of echo still to ignore
+static RX_LAST: AtomicU32 = AtomicU32::new(0); // ticks() at the last edge; the EXTI interrupt's only
+static MUTE_UNTIL: AtomicU32 = AtomicU32::new(0); // ticks(): our own echo is over
 
 /// Segments: 0 header mark, 1 header space, then a mark and a space per
 /// bit, then the end mark. Runs in the TIM3 interrupt.
@@ -135,7 +136,7 @@ fn next_segment() {
         wr(TIM2, CH1CVR, 0);
         wr(TIM2, SWEVGR, UG);
         wr(TIM2, CTLR1, 0);
-        MUTE_LEFT.store(ECHO_US, Ordering::Relaxed);
+        MUTE_UNTIL.store(ticks().wrapping_add(ECHO_MS * TICKS_PER_MS), Ordering::Relaxed);
         MUTED.store(!LOOPBACK.load(Ordering::Relaxed), Ordering::Relaxed);
         BUSY.store(false, Ordering::Release);
         return;
@@ -153,25 +154,17 @@ fn TIM3() {
 }
 
 #[qingke_rt::interrupt]
-fn TIM1_UP() {
-    wr(TIM1, INTFR, !UIF);
+fn EXTI25_16() {
+    let now = ticks();
+    wr32(EXTI + EXTI_INTFR, 1 << RECV_PIN);
     let low = rd32(GPIOB + GPIO_INDR) & 1 << RECV_PIN == 0;
-    let sampler = unsafe { &mut *SAMPLER.0.get() };
-    // load and store only (no atomic swap on this core)
-    if MUTED.load(Ordering::Relaxed) {
-        // our own echo: wait it out, then start afresh
-        let left = MUTE_LEFT.load(Ordering::Relaxed).saturating_sub(SAMPLE_US);
-        MUTE_LEFT.store(left, Ordering::Relaxed);
-        if left == 0 {
-            MUTED.store(false, Ordering::Relaxed);
-        }
-        sampler.restart(low);
+    let us = ticks_to_us(now.wrapping_sub(RX_LAST.load(Ordering::Relaxed)));
+    RX_LAST.store(now, Ordering::Relaxed);
+    if !LOOPBACK.load(Ordering::Relaxed) && (BUSY.load(Ordering::Relaxed) || MUTED.load(Ordering::Relaxed)) {
         return;
     }
-    let Some(v) = sampler.sample(low, SAMPLE_US) else { return };
-    if BUSY.load(Ordering::Relaxed) && !LOOPBACK.load(Ordering::Relaxed) {
-        return;
-    }
+    // the interval that just ended: a space if the output is low now
+    let v = us.min(0x7FFF) as u16 | if low { 0 } else { 0x8000 };
     let head = RX_HEAD.load(Ordering::Relaxed);
     let next = ((head as usize + 1) % RING) as u8;
     if next != RX_TAIL.load(Ordering::Acquire) {
@@ -186,13 +179,12 @@ pub struct Ir {
 
 impl Ir {
     pub fn new() -> Self {
-        let hclk = hal::rcc::clocks().hclk.0;
-        hal::pac::RCC.apb2pcenr().modify(|w| {
+        let hclk = crate::HCLK;
+        crate::pac::RCC.apb2pcenr().modify(|w| {
             w.set_iopben(true);
             w.set_afioen(true);
-            w.set_tim1en(true);
         });
-        hal::pac::RCC.apb1pcenr().modify(|w| {
+        crate::pac::RCC.apb1pcenr().modify(|w| {
             w.set_tim2en(true);
             w.set_tim3en(true);
         });
@@ -229,18 +221,18 @@ impl Ir {
         wr(TIM3, INTFR, 0);
         wr(TIM3, DMAINTENR, UIE);
 
-        // TIM1: 1 MHz, an update every 50 us samples the receiver
-        wr(TIM1, PSC, us_psc);
-        wr(TIM1, ATRLR, SAMPLE_US - 1);
-        wr(TIM1, SWEVGR, UG);
-        wr(TIM1, INTFR, 0);
-        wr(TIM1, DMAINTENR, UIE);
-        wr(TIM1, CTLR1, ARPE | CEN);
+        // EXTI line 19 from port B (EXTICR field 0b01), both edges
+        wr32(AFIO_EXTICR2, rd32(AFIO_EXTICR2) & !(0b11 << 6) | 0b01 << 6);
+        wr32(EXTI + EXTI_RTENR, rd32(EXTI + EXTI_RTENR) | 1 << RECV_PIN);
+        wr32(EXTI + EXTI_FTENR, rd32(EXTI + EXTI_FTENR) | 1 << RECV_PIN);
+        wr32(EXTI + EXTI_INTFR, 1 << RECV_PIN);
+        wr32(EXTI + EXTI_INTENR, rd32(EXTI + EXTI_INTENR) | 1 << RECV_PIN);
+        RX_LAST.store(ticks(), Ordering::Relaxed);
 
         unsafe {
-            use hal::pac::Interrupt;
+            use crate::pac::Interrupt;
             qingke::pfic::enable_interrupt(Interrupt::TIM3 as u8);
-            qingke::pfic::enable_interrupt(Interrupt::TIM1_UP as u8);
+            qingke::pfic::enable_interrupt(Interrupt::EXTI25_16 as u8);
         }
         Self { dec: Decoder::new() }
     }
@@ -280,6 +272,12 @@ impl Ir {
     /// Decode what came in; returns a packet (type, data) when one is
     /// complete. Call it every few ms.
     pub fn poll(&mut self, mut got: impl FnMut(u8, &[u8])) {
+        if MUTED.load(Ordering::Relaxed)
+            && ticks().wrapping_sub(MUTE_UNTIL.load(Ordering::Relaxed)) as i32 >= 0
+        {
+            MUTED.store(false, Ordering::Relaxed);
+            self.dec.reset();
+        }
         loop {
             let tail = RX_TAIL.load(Ordering::Relaxed);
             if tail == RX_HEAD.load(Ordering::Acquire) {

@@ -98,7 +98,7 @@ impl Editor {
             let x = c0 + (i as i32 - self.cursor as i32) * 6;
             if x > -6 && x < GRID_W as i32 {
                 let ch = [c];
-                let s = core::str::from_utf8(&ch).unwrap_or(" ");
+                let s = crate::log::ascii(&ch);
                 draw_text(f, s, x, 3, if i == self.cursor { 255 } else { 60 });
             }
         }

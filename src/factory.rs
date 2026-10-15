@@ -231,7 +231,7 @@ impl Factory {
                             missing[9 + i * 2] = b'.';
                         }
                     }
-                    self.fail(core::str::from_utf8(&missing).unwrap_or(""));
+                    self.fail(crate::log::ascii(&missing));
                 }
             }
             USB => {

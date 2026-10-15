@@ -7,9 +7,8 @@
 //! switch, set FLASH_STATR.BOOT_MODE, request a system reset.
 //! Not tested on hardware.
 
-use ch32_hal as hal;
 use core::ptr::write_volatile;
-use hal::pac::FLASH;
+use crate::pac::FLASH;
 
 const KEY1: u32 = 0x4567_0123;
 const KEY2: u32 = 0xCDEF_89AB;

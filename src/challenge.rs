@@ -335,7 +335,7 @@ impl Victory {
                 continue;
             }
             let bob = (sin8((t * 12).wrapping_sub(i as u32 * 40) as u8) as i32 - 128) * 2 / 128;
-            draw_text(f, core::str::from_utf8(&[ch]).unwrap_or(""), x, (4 + bob) as usize, 255);
+            draw_text(f, crate::log::ascii(&[ch]), x, (4 + bob) as usize, 255);
         }
         self.fireworks(f, rng);
         if x0 + s.len() as i32 * (FONT_W as i32 + 1) <= 0 {

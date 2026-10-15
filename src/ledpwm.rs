@@ -28,7 +28,6 @@
 use core::ptr::{addr_of, addr_of_mut, write_volatile};
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
-use ch32_hal as hal;
 
 use crate::frame::Frame;
 use crate::generated::{COMS, GAMMA, PWM_CHANNELS};
@@ -128,7 +127,7 @@ pub struct LedPwm {
 
 impl LedPwm {
     pub fn new() -> Self {
-        hal::pac::RCC.apb2pcenr().modify(|w| {
+        crate::pac::RCC.apb2pcenr().modify(|w| {
             w.set_iopaen(true);
             w.set_iopben(true);
         });
@@ -136,7 +135,7 @@ impl LedPwm {
         // COM pins PB0..PB15: push-pull outputs, OUTDR 1 = active low.
         // (RM 24.2.2 and table 8-10; with the LED block off this also
         // keeps every LED dark.)
-        let (pa, pb) = (hal::pac::GPIOA.as_ptr() as usize, hal::pac::GPIOB.as_ptr() as usize);
+        let (pa, pb) = (crate::pac::GPIOA.as_ptr() as usize, crate::pac::GPIOB.as_ptr() as usize);
         w32(pa + GPIO_BCR, 0x00FF_FFFF);
         w32(pa + GPIO_CFGLR, 0x3333_3333);
         w32(pa + GPIO_CFGHR, 0x3333_3333);
@@ -157,7 +156,7 @@ impl LedPwm {
         w8(FRAME_CFG, INHIBIT_4); // ~5 us between rows, no repeats
         w8(KEY_CTRL, 0x00);
         w8(FUNC_CTRL, IE_INHIBIT | PWM_OE_CLR | LED_ENABLE);
-        unsafe { qingke::pfic::enable_interrupt(hal::pac::Interrupt::LEDPWM as u8) };
+        unsafe { qingke::pfic::enable_interrupt(crate::pac::Interrupt::LEDPWM as u8) };
         COM.store(0, Ordering::Relaxed);
         load_row(0);
         Self { stalled: false }

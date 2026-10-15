@@ -1,4 +1,4 @@
-//! Hacker Hotel 2027 starfish badge, theoretical Embassy firmware.
+//! Hacker Hotel 2027 starfish badge, theoretical bare-metal firmware.
 //!
 //! Hardware (from ../hackerhotel2027-hardware):
 //!   * WCH CH643Q, QingKe V4C RISC-V, 48 MHz, 62 KiB flash, 20 KiB RAM
@@ -12,14 +12,11 @@
 //!   * IR receiver (PB19) and IR LED (anode on VCC, PB21 cathode, low = on): ir.rs
 //!   * UART header (USART3: PB16 TX, PB17 RX): uart.rs; SWD header (PC18 SWIO, PC19 SWCK)
 //!
-//! Tasks:
-//!   main loop      renders the current animation at FPS and hands frames to the display
-//!   buttons::scan  polls the buttons, sends Press/Tap/Hold/Bootloader/Selftest events
-//!   charge_monitor watches CHRG, sends Charging events
-//!   infrared       decodes received IR packets, sends the ones the app asks for
-//!   serial         the UART: the log out, console lines in
-//!   usb_device     the USB device (usb.rs), its packets to proto.rs
-//! The app is shared between the tasks (`with_app`).
+//! One superloop, like c/src/main.c: SysTick runs free on HCLK/8 and the
+//! loop polls it (`due`) to scan the buttons (100 Hz), check CHRG (2 Hz),
+//! decode IR (every 5 ms) and render frames (FPS). USB and the UART are
+//! polled on every pass. Interrupts: the LED scanner (ledpwm.rs) and
+//! infrared (ir.rs: TIM3 while sending, EXTI line 19 for the receiver).
 #![no_std]
 #![no_main]
 
@@ -49,19 +46,43 @@ mod proto;
 mod sponsors;
 mod store;
 
-use core::cell::{RefCell, UnsafeCell};
-use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::ptr::read_volatile;
 
-use ch32_hal as hal;
-use embassy_executor::Spawner;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
-use embassy_time::{Duration, Ticker, Timer};
-use hal::gpio::{Input, Pull};
+pub use ch32_metapac as pac;
 
 use app::{App, Stage};
 use frame::Frame;
+
+/// HSI, no prescaler: what `clock_init` sets up.
+pub const HCLK: u32 = 48_000_000;
+/// SysTick counts HCLK/8.
+pub const TICKS_PER_MS: u32 = HCLK / 8 / 1000;
+const TICKS_PER_US: u32 = HCLK / 8 / 1_000_000;
+
+const SYSTICK_CTLR: *mut u32 = 0xE000_F000 as *mut u32;
+const SYSTICK_CNTL: *const u32 = 0xE000_F008 as *const u32;
+
+/// SysTick's low word: wraps every 715 s at 6 MHz, `due` copes.
+#[inline]
+pub fn ticks() -> u32 {
+    unsafe { read_volatile(SYSTICK_CNTL) }
+}
+
+pub fn ticks_to_us(t: u32) -> u32 {
+    t / TICKS_PER_US
+}
+
+/// True once `ticks()` has reached `*next`, which then moves on by
+/// `period`; late calls catch up one period at a time (as embassy's
+/// Ticker did).
+#[inline]
+fn due(next: &mut u32, period: u32) -> bool {
+    if (ticks().wrapping_sub(*next) as i32) < 0 {
+        return false;
+    }
+    *next = next.wrapping_add(period);
+    true
+}
 
 /// Things that happen to the badge, consumed by the render loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,79 +101,33 @@ pub enum Event {
     Selftest,
 }
 
-/// The app, shared by the tasks on the one thread-mode executor. No task
-/// holds it across an await and no interrupt touches it, so a RefCell is
-/// all the locking it needs.
-/// (MaybeUninit keeps it in .bss: an `Option<App>` would need 1.2 KB of
-/// flash for its initial value.)
-struct SharedApp(UnsafeCell<MaybeUninit<RefCell<App>>>, AtomicBool);
-unsafe impl Sync for SharedApp {}
-static APP: SharedApp = SharedApp(UnsafeCell::new(MaybeUninit::uninit()), AtomicBool::new(false));
-
-fn start_app(app: App) {
-    unsafe { (*APP.0.get()).write(RefCell::new(app)) };
-    APP.1.store(true, Ordering::Release);
-}
-
-fn with_app<R>(f: impl FnOnce(&mut App) -> R) -> R {
-    assert!(APP.1.load(Ordering::Acquire), "app not started");
-    f(&mut unsafe { (*APP.0.get()).assume_init_ref() }.borrow_mut())
-}
-
 /// PC3 sees VBUS (through R33 to GND): high while USB powers the badge.
 fn vbus() -> bool {
-    hal::pac::GPIOC.indr().read().0 & 1 << 3 != 0
+    pac::GPIOC.indr().read().0 & 1 << 3 != 0
 }
 
-#[embassy_executor::task]
-async fn infrared() {
-    let mut ir = ir::Ir::new();
-    loop {
-        ir.poll(|ty, data| with_app(|app| app.ir_received(ty, data)));
-        with_app(|app| {
-            ir.set_loopback(app.ir_loopback());
-            if !ir.busy() {
-                if let Some((ty, name)) = app.ir_take() {
-                    ir.send(ty, name.bytes());
-                }
-            }
-        });
-        Timer::after_millis(5).await;
-    }
+/// Events wait here for the next frame, as they waited in a channel
+/// before; when it is full new ones are dropped.
+struct Events {
+    buf: [Event; 8],
+    n: usize,
 }
 
-#[embassy_executor::task]
-async fn usb_device() {
-    let mut usb = usb::Usb::new();
-    loop {
-        usb.poll(|packet, reply| with_app(|app| proto::handle(app, packet, reply)));
-        Timer::after_micros(500).await;
-    }
-}
-
-#[embassy_executor::task]
-async fn serial() {
-    let mut uart = uart::Uart::new();
-    loop {
-        uart.poll(|line| with_app(|app| console::line(app, line)));
-        Timer::after_micros(200).await;
-    }
-}
-
-pub static EVENTS: Channel<CriticalSectionRawMutex, Event, 8> = Channel::new();
-
-/// XT4054 CHRG is open-drain and pulled low while the battery charges.
-#[embassy_executor::task]
-async fn charge_monitor(chrg: Input<'static>) {
-    let mut last = None;
-    loop {
-        let charging = chrg.is_low();
-        if last != Some(charging) {
-            EVENTS.send(Event::Charging(charging)).await;
-            last = Some(charging);
+impl Events {
+    fn push(&mut self, ev: Event) {
+        if self.n < self.buf.len() {
+            self.buf[self.n] = ev;
+            self.n += 1;
         }
-        Timer::after_millis(500).await;
     }
+}
+
+/// XT4054 CHRG (PB22) is open-drain and pulled low while the battery
+/// charges: input with pull-up.
+const CHRG_PIN: u32 = 22;
+
+fn charging() -> bool {
+    pac::GPIOB.indr().read().0 & 1 << CHRG_PIN == 0
 }
 
 /// Pads that exist on the die but are not bonded out in the LQFP64 package
@@ -162,7 +137,7 @@ async fn charge_monitor(chrg: Input<'static>) {
 /// CC jumpers went in hardware commit 0986add), so pull those up too. PC3
 /// (VBUS sense, 100k to GND) must stay a floating input.
 fn pull_up_unused_pads() {
-    use hal::pac::{GPIOC, RCC};
+    use pac::{GPIOC, RCC};
     RCC.apb2pcenr().modify(|w| w.set_iopcen(true));
     // input with pull-up = mode nibble 0b1000, pull selected by OUTDR = 1
     GPIOC.cfglr().modify(|w| w.0 = (w.0 & 0x00FF_F000) | 0x8800_0888); // PC0..PC2, PC6, PC7
@@ -174,22 +149,33 @@ fn pull_up_unused_pads() {
     GPIOC.bsxr().write(|w| w.0 = 1 << 4);
 }
 
-#[embassy_executor::main(entry = "qingke_rt::entry")]
-async fn main(spawner: Spawner) -> ! {
-    let mut config = hal::Config::default();
-    config.rcc = hal::rcc::Config::SYSCLK_FREQ_48MHZ_HSI;
-    let p = hal::init(config);
-    pull_up_unused_pads();
+/// The CH643 runs on its 48 MHz HSI; ch32-hal's rcc init for this chip
+/// (rcc/x0.rs) does the same: HSI on, two flash wait states, HCLK = SYSCLK.
+fn clock_init() {
+    use pac::{FLASH, RCC};
+    RCC.ctlr().modify(|w| w.set_hsion(true));
+    FLASH.actlr().modify(|w| w.set_latency(0b10));
+    RCC.cfgr0().modify(|w| w.set_hpre(pac::rcc::vals::Hpre::DIV1));
+    // ch32-hal's init also enabled and reset AFIO and enabled GPIOA..C
+    RCC.apb2pcenr().modify(|w| {
+        w.set_afioen(true);
+        w.set_iopaen(true);
+        w.set_iopben(true);
+        w.set_iopcen(true);
+    });
+}
 
-    spawner.spawn(charge_monitor(Input::new(p.PB22, Pull::Up)).unwrap());
-    // ◀ B A ▶; floating inputs, the pull-ups are on the board
-    let pins = [
-        Input::new(p.PC5, Pull::None),
-        Input::new(p.PB20, Pull::None),
-        Input::new(p.PC4, Pull::None),
-        Input::new(p.PB18, Pull::None),
-    ];
-    spawner.spawn(buttons::scan(pins).unwrap());
+#[qingke_rt::entry]
+fn main() -> ! {
+    clock_init();
+    pull_up_unused_pads();
+    // SysTick: reset the count, enable, HCLK/8, count up (as c/src/main.c)
+    unsafe { core::ptr::write_volatile(SYSTICK_CTLR, 1 << 5 | 1 << 0) };
+
+    // PB22 (CHRG) input with pull-up: CFGXR nibble 6 = 0b1000, pull-up by BSXR
+    pac::GPIOB.cfgxr().modify(|w| w.0 = (w.0 & !(0xF << 24)) | 0x8 << 24);
+    pac::GPIOB.bsxr().write(|w| w.0 = 1 << (CHRG_PIN - 16));
+    let mut buttons = buttons::Buttons::new();
 
     // LEDPWM owns PA0..PA23 and PB0..PB15; nothing else may touch those pins.
     let mut display = ledpwm::LedPwm::new();
@@ -198,33 +184,63 @@ async fn main(spawner: Spawner) -> ! {
     log::line(name.as_str());
     log::line("Type help.");
     let mut stage = store::stage();
-    start_app(first_app(name, stage, store::progress()));
-    spawner.spawn(infrared().unwrap());
-    spawner.spawn(serial().unwrap());
-    spawner.spawn(usb_device().unwrap());
+    let mut app = first_app(name, stage, store::progress());
+    let mut ir = ir::Ir::new();
+    let mut uart = uart::Uart::new();
+    let mut usb = usb::Usb::new();
     let mut frame = Frame::new();
-    let mut ticker = Ticker::every(Duration::from_hz(anim::FPS as u64));
+    let mut events = Events { buf: [Event::Selftest; 8], n: 0 };
+    let mut last_charging = None;
     // at most one name save per SAVE_FRAMES: a script renaming the badge
     // over USB must not wear out the page; the last name always gets saved
     let mut pending = None;
     let mut since_save = SAVE_FRAMES;
 
+    const FRAME_TICKS: u32 = HCLK / 8 / anim::FPS;
+    let now = ticks();
+    let (mut next_frame, mut next_buttons, mut next_chrg, mut next_ir) = (now, now, now, now);
     loop {
-        while let Ok(ev) = EVENTS.try_receive() {
+        usb.poll(|packet, reply| proto::handle(&mut app, packet, reply));
+        uart.poll(|line| console::line(&mut app, line));
+        if due(&mut next_ir, 5 * TICKS_PER_MS) {
+            ir.poll(|ty, data| app.ir_received(ty, data));
+            ir.set_loopback(app.ir_loopback());
+            if !ir.busy() {
+                if let Some((ty, name)) = app.ir_take() {
+                    ir.send(ty, name.bytes());
+                }
+            }
+        }
+        if due(&mut next_buttons, buttons::POLL_MS * TICKS_PER_MS) {
+            buttons.poll(|ev| events.push(ev));
+        }
+        if due(&mut next_chrg, 500 * TICKS_PER_MS) {
+            let c = charging();
+            if last_charging != Some(c) {
+                events.push(Event::Charging(c));
+                last_charging = Some(c);
+            }
+        }
+        if !due(&mut next_frame, FRAME_TICKS) {
+            continue;
+        }
+
+        for &ev in &events.buf[..events.n] {
             if ev == Event::Bootloader {
                 // show it for a second, so a held chord is visibly accepted
-                let level = with_app(|app| app.brightness()).max(32);
+                let level = app.brightness().max(32);
                 for t in 0..anim::FPS {
                     frame.clear();
                     anim::usb_boot(&mut frame, t);
                     display.show(&frame, level);
-                    ticker.next().await;
+                    while !due(&mut next_frame, FRAME_TICKS) {}
                 }
                 bootloader::reboot_to_boot_rom();
             }
-            with_app(|app| app.handle(ev));
+            app.handle(ev);
         }
-        if let Some(name) = with_app(|app| app.saved_name()) {
+        events.n = 0;
+        if let Some(name) = app.saved_name() {
             pending = Some(name);
         }
         since_save = since_save.saturating_add(1);
@@ -234,13 +250,13 @@ async fn main(spawner: Spawner) -> ! {
             log::text("name saved: ");
             log::line(name.as_str());
         }
-        if let Some(p) = with_app(|app| app.progress()) {
+        if let Some(p) = app.progress() {
             store::set_progress(p);
             log::text("challenges: ");
-            log::num(with_app(|app| app.challenges().total()) as u32);
+            log::num(app.challenges().total() as u32);
             log::line(" of 25");
         }
-        if let Some(next) = with_app(|app| app.stage()) {
+        if let Some(next) = app.stage() {
             if next > stage {
                 // only forward: a re-run test does not bring the reel back
                 store::set_stage(next);
@@ -248,13 +264,9 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
         frame.clear();
-        let level = with_app(|app| {
-            app.hw = selftest::Hw { rows: ledpwm::rows(), vbus: vbus() };
-            app.render(&mut frame, buttons::held());
-            app.brightness()
-        });
-        display.show(&frame, level);
-        ticker.next().await;
+        app.hw = selftest::Hw { rows: ledpwm::rows(), vbus: vbus() };
+        app.render(&mut frame, buttons.held());
+        display.show(&frame, app.brightness());
     }
 }
 
@@ -262,8 +274,7 @@ async fn main(spawner: Spawner) -> ! {
 const SAVE_FRAMES: u16 = 5 * anim::FPS as u16;
 
 /// The app at power on: a new badge starts with the factory test, one
-/// that just passed it with the sponsor reel. Not inside main: a local App
-/// there would take its 1.3 KB in the main task's static future.
+/// that just passed it with the sponsor reel.
 fn first_app(name: nametag::Name, stage: Stage, progress: u16) -> App {
     let mut app = App::new(name);
     app.load_progress(progress);

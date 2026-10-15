@@ -1,7 +1,8 @@
 # hh27-starfish firmware (theoretical)
 
-Embassy firmware for the Hacker Hotel 2027 starfish badge. It compiles, but it
-has never run on a board.
+Bare-metal firmware for the Hacker Hotel 2027 starfish badge, in Rust
+(`src/`) and in C (`c/`): the same firmware twice, both on the registers
+with no HAL. It compiles, but it has never run on a board.
 
 | | | | | |
 |---|---|---|---|---|
@@ -10,7 +11,7 @@ has never run on a board.
 | ![victory dance](docs/fw/victory.gif) | ![factory test](docs/fw/factory.gif) | ![sponsor reel](docs/fw/sponsors.gif) | ![bring-up test](docs/fw/selftest.gif) | |
 | ![ripple](docs/anim/ripple.gif) | ![galaxy](docs/anim/galaxy.gif) | ![fire](docs/anim/fire.gif) | ![heartbeat](docs/anim/heartbeat.gif) | |
 
-Top two rows: recorded from the firmware itself, running on the PC
+Top three rows: recorded from the firmware itself, running on the PC
 (`tools/fwsim`; the name swap from two C emulators), drawn on a KiCad
 render of the board with the real LED positions: games and screens, the
 challenge games and the progress on the name tag, the victory dance, the
@@ -24,7 +25,7 @@ every game, the name tag and the emulator. The short version:
 
 | | |
 |---|---|
-| **Hold A** | open the menu (from anywhere, also mid-game) |
+| **Hold A** | open the menu (also mid-game; [where it does not](docs/USAGE.md#always-available)) |
 | Menu | ◀ / ▶ previous / next, **A** select, hold A close |
 | Name, hotel, animations | ◀ / ▶ previous / next screen, A brightness |
 | Games | play themselves until you press ◀, ▶ or B |
@@ -70,14 +71,16 @@ that receives it shows "HI" and your name, and answers with its own name,
 which yours then shows: one press, and both know who they met. The format
 is NEC-style pulse-distance coding on 38 kHz, with a type, a length and a
 CRC (`c/src/irproto.h`, `src/irproto.rs`). TIM2 CH1 makes the carrier on
-PB21, the LED's cathode, in both (low = LED on). In C the SysTick compare
-interrupt switches it at each mark and space and the receiver's edges
-come in on EXTI (`c/src/ir.c`); in Rust, where Embassy owns SysTick and
-ch32-hal the EXTI interrupts, TIM3 times the marks and spaces and TIM1
-samples the receiver every 50 us (`src/ir.rs`). The C driver is tested on
-the PC against a fake SysTick, TIM2 and GPIO (waveform out decodes,
-distorted edges in decode, own echo ignored), the Rust sampler with a
-distorted packet at every sampling phase; neither is tested on a badge.
+PB21, the LED's cathode, in both (low = LED on); TIM2 is an advanced
+timer on the CH643, so it needs BDTR.MOE set before anything comes out.
+The marks and spaces are timed by the SysTick compare interrupt in C
+(`c/src/ir.c`) and by TIM3 in one-shot mode in Rust (`src/ir.rs`). Both
+receive the same way: an EXTI interrupt on both edges of PB19 (line 19)
+times each mark and space with SysTick, and the main loop decodes them.
+The C driver is tested on the PC against a fake SysTick, TIM2, EXTI and GPIO (`c/test/test_ir.c`:
+waveform out decodes, distorted edges in decode, own echo ignored, a send
+whose deadline passed during a flash write still ends), the Rust decoder
+with a distorted, edge-timed packet; neither is tested on a badge.
 C and Rust badges swap names with each other (checked in the emulator).
 
 **UART console.** The UART header J3 (115200 8N1) prints a log (boot,
@@ -118,7 +121,7 @@ board where they are; see
 ## Build
 
 ```sh
-cargo build --release            # stable Rust, target riscv32imc-unknown-none-elf
+cargo build --release            # Rust 1.98.0 (rust-toolchain.toml), target riscv32imc-unknown-none-elf
 cargo run --release              # flashes over USB with wchisp, see Flashing
 ```
 
@@ -152,6 +155,11 @@ wchisp probe
 wchisp flash target/riscv32imc-unknown-none-elf/release/hh27-starfish
 ```
 
+`wchisp flash` erases whole 1 KiB sectors, one more than the image
+needs. Below 61440 bytes that leaves the last page (the name, the
+challenges' progress and the first-boot stage) alone; from 61440 bytes on,
+every update would wipe it. CI fails either firmware when it gets there.
+
 On Linux, give your user access to the boot ROM's USB ID (4348:55e0), for
 example with a udev rule:
 `SUBSYSTEM=="usb", ATTRS{idVendor}=="4348", ATTRS{idProduct}=="55e0", MODE="0666"`.
@@ -177,8 +185,8 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 
 | File | What |
 |---|---|
-| `main.rs` | Embassy main: render loop at 30 fps, event channel, CHRG monitor task |
-| `buttons.rs` | Button polling task: debounce, press / tap / hold events, held buttons, the ◀ + ▶ chord |
+| `main.rs` | Superloop on a free-running SysTick, like `c/src/main.c`: buttons every 10 ms, CHRG every 500 ms, IR decode every 5 ms, frames at 30 fps, USB and UART on every pass; an 8-entry event queue; clock setup, unused pads |
+| `buttons.rs` | Button polling: debounce, press / tap / hold events, held buttons, the ◀ + ▶ chord |
 | `app.rs` | Menu, the list of screens, brightness, charging overlay |
 | `nametag.rs` | Name tag and Hacker Hotel 2027 screens, the `Name` type |
 | `editor.rs` | Name entry on the badge (EDIT NAME) |
@@ -193,8 +201,8 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `bootloader.rs` | Reboot into the USB boot ROM |
 | `generated.rs` | LED map, polar coordinates, gamma and sine tables (generated) |
 | `usb.rs`, `proto.rs` | USB device on the registers (WebUSB setup page), and its protocol |
-| `ir.rs`, `irproto.rs` | Infrared: TIM1 carrier, TIM3 timing, TIM2 capture; packets and pulse decoder |
-| `uart.rs`, `console.rs`, `log.rs` | UART header: the log out, console commands in |
+| `ir.rs`, `irproto.rs` | Infrared: TIM2 CH1 carrier on PB21 (with MOE), TIM3 mark and space timing, receive on EXTI line 19; packets and pulse decoder |
+| `uart.rs`, `console.rs`, `log.rs` | UART header: the log out, console commands in (received on the USART3 interrupt) |
 | `selftest.rs` | Bring-up test for new boards |
 | `factory.rs` | Factory test for the flashing table (first power-on until it passes) |
 | `sponsors.rs`, `logos.rs` | Sponsor reel (the power-on after the factory test), with the sponsor table; the logos (generated) |
@@ -206,15 +214,20 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 
 | | |
 |---|---|
-| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it; `--fresh` starts as a freshly flashed badge (factory test, then sponsor reel); emulators share infrared, stdin is the UART console |
-| `tools/fwsim` | `cargo test` checks the name editor. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random presses in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
-| `tools/sim/logo.py` | Sponsor logos: `assets/sponsors/*.svg` to greyscale bitmaps for the grid (`c/src/logos.h`, `src/logos.rs`); needs Inkscape |
+| `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it (and opens it in the browser, unless `--no-browser`); `--fresh` starts as a freshly flashed badge (factory test, then sponsor reel); emulators share infrared, stdin is the UART console |
+| `tools/fwsim` | `cargo test` runs 16 tests: the name editor, label scrolling, browsing, name clean-up, console commands, the USB protocol (also fuzzed), the IR decoder on edge-timed pulses, the challenge levels, and the four challenge games played to level 5. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random presses in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
+| `tools/emu/parity.py` | Runs the C and Rust emulator libraries side by side and compares them frame for frame, on the screens that use no random numbers |
+| `c/test` | `make -C c test`: C host tests under ASan and UBSan. The drivers (buttons, ir, ledpwm, store) against fake registers, the app through its interface (names, editor, infrared, console, factory test, USB, browsing), the challenges played to level 5, and a 200 000-frame soak |
+| `.github/workflows/ci.yml` | CI: builds both firmwares and fails when either is over 61440 bytes of flash (see Flashing), runs the C tests, the fwsim tests and soak, and the parity check |
+| `tools/sim/logo.py` | Sponsor logos: `assets/sponsors/*.svg` to greyscale bitmaps for the grid (`c/src/logos.h`, `src/logos.rs`); needs Inkscape and scipy |
 | `tools/sim/fwgif.py` | Turns a `fwsim record` (or frames from the C emulator library) into a GIF on the board render |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
 | `tools/sim/games.py` | The first game mock-ups, played by a scripted AI |
 | `tools/gen_layout.py` | LED map from the KiCad board, for Rust and C |
 
-The Python tools need numpy, scipy, Pillow and ffmpeg.
+The Python tools need numpy, scipy and Pillow; the emulator also needs
+tkinter, and the GIF and MP4 output (`hh2027.py`, `fwgif.py`, `games.py`)
+ffmpeg.
 
 ## Size
 
@@ -227,40 +240,56 @@ and the first-boot stage.
 
 | | Flash (of 62 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **43.6 KB** (71%) | 6.6 KB + 2 KB stack |
-| Rust + Embassy, `opt-level = "z"` (default) | **58.4 KB** (95%) | 4.7 KB + stack |
-| Rust + Embassy, `opt-level = "s"` | does not fit (2 KB over) | |
+| C, GCC 15 `-Os` | **44.0 KB** (71%) | 4.7 KB + 2 KB stack |
+| Rust, `opt-level = "z"` (default) | **52.0 KB** (84%) | 2.2 KB + stack |
+| Rust, `opt-level = "s"` | 57.7 KB (93%) | 2.2 KB + stack |
 
-**Rust is nearly full**: 3.4 KB left, and only with `opt-level = "z"`.
+From `size`: flash is text + data, static RAM data + bss (C's bss
+includes its 2 KB stack, counted separately here). The Rust stack is not
+static: main's stack also holds the App, about 1.3 KB.
+
+Rust has 9.7 KB left, C 17.8 KB; below the 61440-byte point where
+`wchisp flash` would wipe the settings (see Flashing), 8.0 and 16.0 KB.
 The challenges (four games, the progress and the victory dance) cost
 7.6 KB in C (the dance with its stick figure and fireworks 2.9 KB, the
-maze 1.8 KB) and 8.8 KB in Rust. The factory test and the sponsor reel cost 4.9 KB in C
-(the test 2.4 KB, a third of it the volunteers' hints in the log; the reel
-2.2 KB, of which the five greyscale logos are 0.94 KB) and 5.3 KB in
-Rust.
+maze 1.8 KB) and about 8.8 KB in Rust. The factory test and the sponsor
+reel cost 4.9 KB in C (the test 2.4 KB, a third of it the volunteers'
+hints in the log; the reel 2.2 KB, of which the five greyscale logos are
+0.94 KB) and about 5.3 KB in Rust (the Rust figures were measured when it
+still ran on Embassy).
 
 Roughly where the C flash goes: animations 4.0 KB, the app (menu, USB
-settings, infrared greeting) 3.4 KB, Startris 2.5 KB, LED tables 2.2 KB,
+settings, infrared greeting) 4.3 KB, Startris 2.5 KB, LED tables 2.2 KB,
 Snake 1.8 KB (its demo path search included),
 Pong / Star Chase / game shell / name tag / Breakout about 1.1 to 1.3 KB
 each, Flappy 0.7 KB. The 5x7 font is 295 bytes.
 
 USB in C is 2.3 KB: the driver about 1.25 KB, descriptors 0.3 KB (the
 Windows part 195 bytes), the protocol 0.4 KB, and 326 bytes of RAM.
-Infrared and the UART console add 4.2 KB (IR driver 1.1 KB, pulse codec
-0.7 KB, UART 0.5 KB, console 1.0 KB, the greeting in the app about 1 KB)
-and 0.85 KB of RAM, mostly the UART's 512-byte send buffer. Without
-USB, IR and UART, C is about 22 KB, and Rust is about 1.6 times that: about 3 KB of Embassy executor, timer
-and HAL interrupt code, the rest is code generation. C has 18 KB left
-for more; Rust would need something taken out first.
+Infrared and the UART console add 4.8 KB (IR driver 1.1 KB, pulse codec
+0.7 KB, UART 0.6 KB, console 1.4 KB, the greeting in the app about 1 KB)
+and 0.9 KB of RAM, mostly the UART's 512-byte send and 128-byte receive
+buffers.
+
+Rust is 8.0 KB (8220 bytes, 1.18 times) larger than C for the same
+features, with no runtime left to account for it: the gap is code
+generation in the app code (panic paths, bounds checks, inlining).
+Until the bare-metal rewrite the Rust firmware ran on Embassy with
+ch32-hal, and was 58.5 KB. Embassy served only as a timer service (six
+tasks, each a poll and a sleep, and one channel; no peripheral was
+awaited), at about 5.6 KB of flash and 2.7 KB of RAM. ch32-hal's own EXTI
+handlers kept IR receive off EXTI, so it sampled the receiver on TIM1
+instead, and ch32-hal's CH643 support came from git only, as it is not on
+crates.io. Now the Rust firmware uses ch32-metapac, qingke, qingke-rt and
+critical-section (34 crates in `Cargo.lock`, all from crates.io).
 
 ## What is solid and what is guessed
 
 **Solid**
 
-- ch32-hal has a `ch643` feature (Embassy time driver, RCC, GPIO, ADC, timers).
-  The dependency is pinned to commit `4fde792`, because CH643 support is not on
-  crates.io yet.
+- ch32-metapac 0.1.1 on crates.io has a `ch643` feature: the register
+  definitions the Rust firmware uses. Clock setup does what ch32-hal's
+  CH643 init does (HSI, two flash wait states, HCLK = SYSCLK).
 - The LED map is traced from the PCB nets.
 
 - **LEDPWM**, from the CH643 reference manual (CH643RM V1.9, chapter 24).
@@ -272,8 +301,8 @@ for more; Rust would need something taken out first.
 - **Remaps** (RM 8.3.2.1): USART3_RM = 11 puts TX/RX on PB16/PB17, and
   TIM2_RM = 001 puts CH1 on PB21, which makes the IR carrier (its CH2..CH4
   land on LED matrix pins then, so they stay off). PB19, the receiver, has
-  only TIM2 CH4 (TIM2_RM = 100) as a timer input, so it is read by EXTI
-  (C) or sampled (Rust). (ch32-data's CH643 tables stop at USART3 remap 2
+  only TIM2 CH4 (TIM2_RM = 100) as a timer input, so both firmwares read
+  it on EXTI line 19. (ch32-data's CH643 tables stop at USART3 remap 2
   and TIM1 remap 3.)
 - **SysTick** (QingKe V4 manual, chapter 5): with STRE = 0 the counter runs
   on past the compare value and sets CNTIF there, as `ir.c` uses it.
@@ -289,10 +318,12 @@ for more; Rust would need something taken out first.
 
 - **Unbonded and unused pads.** WCH's SystemInit pulls up the pads that the
   LQFP64 package does not bond out (PC6–PC9, PC12, PC13, PC20); if they
-  float they draw current. ch32-hal does not do this, so `main.rs` does it,
-  and pulls up PC0–PC2, PC14 and PC15 too, which the board leaves
-  unconnected (the touch pads and the CC jumpers went), and PB23 (no
-  longer the IR LED). PC3 (VBUS sense) must stay a floating input.
+  float they draw current. The firmware does it too, on the registers:
+  `pull_up_unused_pads` in `main.rs`, and `c/src/quirks.c` in place of
+  WCH's `GPIO_IPD_Unused`. Both also pull up PC0–PC2, PC14 and PC15,
+  which the board leaves unconnected (the touch pads and the CC jumpers
+  went); `ir.rs` / `ir.c` pull up PB23 (no longer the IR LED). PC3 (VBUS
+  sense) must stay a floating input.
 - **IR receiver supply: fixed** in hardware commit 0986add. Its VCC
   (through R36) and the IR_RECV pull-up R35 were on a `+3.3V` net that
   nothing drove; they are on VCC now.
@@ -311,6 +342,7 @@ for more; Rust would need something taken out first.
   factory test walks the grid in the order you see instead.
 - **No battery gauge.** The board has no battery-voltage sense, so the
   firmware can show *that* the battery charges but not *how full* it is.
-- **USB in Rust.** ch32-hal has no USB driver for the CH643, so `src/usb.rs`
-  drives the USB block on its registers, polled from a task every 0.5 ms,
-  like the C driver (not embassy-usb).
+- **USB on the registers.** `src/usb.rs` drives the USB block on its
+  registers, as `c/src/usb.c` does (ch32-hal, which the Rust firmware
+  used before, had no USB driver for the CH643); both are polled on every
+  pass of the main loop.

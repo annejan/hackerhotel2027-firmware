@@ -1,7 +1,9 @@
 # Using the starfish badge
 
 This guide covers the firmware in this repo (Rust in `src/`, C in `c/`).
-Both versions behave the same. Nothing here has run on a real badge yet.
+Both versions behave the same, apart from a few words on the UART console
+(noted there) and the USB boot screen, which is one frame shorter in C.
+Nothing here has run on a real badge yet.
 To try it on a PC, use the [emulator](#emulator).
 
 ## The buttons
@@ -25,15 +27,16 @@ back.
 | **Chord** | Two or more buttons down at the same time. A chord does not count as a tap or a hold. |
 
 So to hold a button, hold that button **alone**. If another button is also
-down, it is a chord and nothing happens.
+down, it is a chord: neither button taps or holds. Each press still
+counts, though, so a game still sees it.
 
 ## Always available
 
 | Do this | What happens |
 |---|---|
-| **Hold A** | The menu opens. This works from every screen, also in the middle of a game. |
+| **Hold A** | The menu opens. This works from the name tag, the Hacker Hotel screen, the animations, VICTORY and the games, also in the middle of a game. In EDIT NAME hold A saves, and in the bring-up test it leaves the test. It does nothing during the factory test, the sponsor reel or the victory dance you earn with the last challenge, or while a greeting or the charging screen shows: tap to end those first. |
 | **Hold ◀ + ▶ for 3 s** | The badge reboots into the USB boot ROM for flashing. An arrow runs down the grid for a second first. See [Flashing](../README.md#flashing). |
-| Plug in USB | A battery gauge shows while the battery charges. Tap any button to hide it. It does not cover a game that you are playing. |
+| Plug in USB | While the battery charges, a battery on the grid fills up, over and over (the badge cannot tell how full the battery is). Tap any button to hide it. It does not show over a game that you are playing, the menu, EDIT NAME or the bring-up test. |
 
 ## The menu
 
@@ -44,7 +47,7 @@ the group:
 | Arm colour | Group |
 |---|---|
 | Orange | Name tag, Hacker Hotel |
-| Purple | Animations |
+| Purple | Animations, Victory |
 | Green | Games |
 | White | Edit name, Light |
 
@@ -88,19 +91,24 @@ The items, in order:
 ### Demo mode
 
 Every game starts in **demo mode**: the game plays itself, and a dim
-light runs slowly round the outline. **Press ◀, ▶ or B to start a real
-game.** A does not start a game. In demo mode, tap A for brightness or
-hold A for the menu.
+light runs slowly round the outline (not in Star Chase, Maze and Higher
+lower, which use the outline themselves). **Press ◀, ▶ or B to start a
+real game.** A does not start a game. In demo mode, tap A for brightness
+or hold A for the menu.
 
 At game over, the arms flash red and your score shows on the grid. Then
-the game goes back to demo mode. If you win at Pong, the arms do not flash
-red.
+the game goes back to demo mode. If you win at Pong, or solve all five
+mazes, the arms do not flash red.
 
 ### Leaving a game
 
 **Hold A** (alone) to open the menu, then pick something else. In a game,
-a quick tap on A does something else: Startris uses it to rotate the
-piece, and the other games ignore it.
+A goes to the game the moment you press it: Startris rotates the piece,
+Maze moves down, Simon takes it as one of its four buttons, and
+Whack-a-mole as a stop like any button. The other games ignore it. In
+those four, the press that starts a hold is a move too: in Simon it can
+be a wrong button, and in Whack-a-mole, while nothing is lit, it ends
+the game.
 
 ### The games
 
@@ -108,12 +116,12 @@ piece, and the other games ignore it.
 |---|---|---|
 | **Snake** | ◀ turns left, ▶ turns right. You can press two turns ahead. | The food you eat, shown in green on the arms. From a score of 10, the snake moves faster. |
 | **Startris** | ◀ / ▶ move the piece (hold to repeat). Tap A to rotate, B to drop. | The lines you clear. The arms also show the colour of the next piece. |
-| **Breakout** | ◀ / ▶ move the paddle. Hold to keep it moving. | The bricks you break, in orange. Your lives (3) show in blue on the first arms. When all the bricks are gone, a faster wave starts. |
+| **Breakout** | ◀ / ▶ move the paddle. Hold to keep it moving. | The bricks you break fill the arms in orange from the top arm on, one LED for every 3 bricks. Your lives (3) light whole arms in dim blue: the top one and the two on the right, under the orange. When all the bricks are gone, a faster wave starts. |
 | **Pong** | You play against the badge. ◀ moves your paddle (left side) up, ▶ moves it down. Hold to keep it moving. | Your points show in blue on the left arms, the badge's in red on the right arms. First to 5 wins. |
 | **Flappy** | Press ◀, ▶ or B to flap. | The pipes you pass, in gold. |
-| **Star Chase** | A light runs round the outline. Press ◀, ▶ or B when it is beside the arm that shows green. | The grid shows your level. Each hit makes the light faster. After 3 misses, the game is over. |
+| **Star Chase** | A light runs round the outline. Press ◀, ▶ or B when it is beside the arm that shows green. | The grid shows your level. Each hit makes the light faster, up to a limit. After 3 misses, the game is over. |
 | **Whack-a-mole** | A random arm lights up from its tip towards the centre. Press any button to stop it. Pressing while nothing is lit ends the game. | The sooner you stop it, the more points: 5 with one LED lit, 2 with four. It gets faster every 3 hits. When the light reaches the centre, the game is over. |
-| **Simon** | The badge lights a sequence on the four legs that have a button: ◀ lower left, ▶ lower right, A upper right, B upper left (A and B are on the back of those arms). Press it back. | The length you repeated. Each round adds one. The top arm fills as you enter the sequence, and flashes green when you got it all. A wrong button, or 5 s without one, ends the game. |
+| **Simon** | The badge lights a sequence on the four legs that have a button: ◀ lower left, ▶ lower right, A upper right, B upper left (A and B are on the back of those arms). Press it back. | The length you repeated. Each round adds one. The top arm fills as you enter the sequence, and lights green for 0.6 s when you got it all. A wrong button, or 5 s without one, ends the game. |
 | **Maze** | You stay in the middle of the grid and the maze moves around you; only the walls close by are lit. ◀ / ▶ left / right, B up, A down (hold to repeat). The arm that lights up points towards the exit, in the far corner. | Five mazes, from 5 x 5 to 13 x 13 cells, each with a time limit (15 s, then 8 s more per maze) shown on the outline. The side LEDs of an arm turn green for every maze solved. |
 | **Higher lower** | A number from 1 to 99. Will the next one be higher (▶, its leg lights green) or lower (◀, red)? | Your streak of right guesses fills the outline, 5 LEDs a point. One wrong guess and the game is over. |
 
@@ -181,6 +189,10 @@ The name is kept in the last 256-byte page of flash, so it is still there
 after you switch off. A firmware update with `wchisp flash` keeps it;
 `wchisp erase` clears it. Saving to flash is not tested on a badge yet.
 
+A new name, from EDIT NAME, the console or the setup page, is written to
+flash at most once every 5 s, so a script that renames the badge over and
+over does not wear the flash out. The last name always gets written.
+
 ### The default
 
 Until you save a name, the badge shows the name the firmware was built
@@ -191,15 +203,15 @@ BADGE_NAME="ANNE JAN" cargo build --release      # Rust
 make -C c NAME="ANNE JAN"                        # C
 ```
 
-The font has upper-case letters, digits and ` !'*-.:?/#@`. Lower case shows
+The font has upper-case letters, digits and ` !'*-.:?/#@<>`. Lower case shows
 as upper case. Names up to 3 characters stand still. Longer names scroll.
 
 ## Meeting other badges (infrared)
 
 On the name tag, **tap B** to send your name over infrared. Point the top
 of your badge, where the IR LED and receiver sit, at the other badge. A
-white wave runs out along your arms while it sends (about a quarter of a
-second).
+white wave runs out along your arms for a second as it sends (the
+packet itself takes up to half a second, longer for a longer name).
 
 The badge that receives it shows **HI**, then your name, with colours
 running round its arms, and sends its own name back; your badge then
@@ -209,23 +221,24 @@ met. Tap any button to close a greeting early.
 A greeting waits while the menu or EDIT NAME is open or a game is being
 played, and shows when you are done. The answer goes out straight away.
 
-Not tested on a badge yet. On the
-current board the IR receiver has no supply (see the
+Not tested on a badge yet. It needs a board with the IR LED and the
+receiver fitted. The receiver's missing supply is fixed in hardware
+commit 0986add (see the
 [hardware notes](../README.md#hardware-notes-found-along-the-way)), so
-receiving needs a board fix first.
+prototypes from that revision on should both send and receive.
 
 ## UART console
 
 The UART header J3 (pin 1 RX, pin 2 TX, pin 4 GND; 115200 baud, 8N1)
 prints a log: the name at power on, names saved, infrared packets sent
-and received. Type a command and Enter:
+and received. Type a command and Enter (pasting a whole line works too):
 
 | Command | |
 |---|---|
 | `help` | the commands and the list of items |
 | `info` | firmware, name, what is showing, brightness |
 | `name TEXT` | set the name, saved in flash like EDIT NAME |
-| `show N` | show item N (`help` lists them; not EDIT NAME or LIGHT) |
+| `show N` | show item N (`help` lists them; not EDIT NAME or LIGHT). For an item it cannot show, C says `? try help`, Rust `? not an item to show (see help)` |
 | `level N` | brightness, 0 (night) to 4 (full) |
 | `hello` | send the name over infrared, as B on the name tag does |
 | `test` | the [bring-up test](#bring-up-test-first-boards) |
@@ -265,9 +278,9 @@ on the repair pile. Tap **B** to try that step once more. KEY fails after
 20 s and USB and IR after 10 s; the UART log says what was missing
 (`factory test: FAIL at KEY: missing: < . A .`).
 
-On the current board revision the IR receiver has no supply (see the
-hardware notes in the README), so the IR step fails there until that is
-fixed.
+The IR step needs the IR LED and the receiver on the board. With the
+receiver's supply fixed (hardware commit 0986add, see the hardware notes
+in the README), expect it to pass on prototypes.
 
 Holding **A + B for 3 s** leaves the factory test for the full bring-up
 test below. The badge then runs the factory test again at the next
@@ -306,7 +319,9 @@ up. For now:
 
 The logos come from the SVGs in `assets/sponsors`. To add or change one,
 put the SVG (or a PNG) there, add a line to the `LOGOS` table in
-`tools/sim/logo.py` (how many grid rows it gets, an optional crop) and run:
+`tools/sim/logo.py` (how many grid rows it gets, an optional crop, the
+ink: alpha, white, or a colour for outline letters to fill, and a
+brightness floor) and run it; it needs Inkscape and scipy:
 
 ```sh
 python3 tools/sim/logo.py --preview=logos.png   # writes c/src/logos.h and src/logos.rs
@@ -319,7 +334,7 @@ taller than the grid also pans from its top to its bottom. Word marks
 work best at 9 to 16 rows; thin lines and small text get lost, so the
 ALLNET globe is redrawn in the tool with fewer, thicker lines, and
 deFEEST's outline letters are filled. A logo costs a quarter byte a
-pixel: 100 to 250 bytes each.
+pixel: 95 to 240 bytes each.
 
 ## Bring-up test (first boards)
 
@@ -336,8 +351,8 @@ is logged there. ◀ / ▶ go to the previous / next test, **hold A** leaves.
 | PWM | one PWM channel on all COM lines, stepping PA0..PA23 | `PWM PA7 on` |
 | LED | one LED at a time, 4 a second. B pauses; while paused, tap A steps | `slot 41: PB1 PA17 D35 green` |
 | ALL | every LED on at the current brightness: measure the current here | the brightness level |
-| GRY | grey ramp left to right on the grid; arms red, green, blue, white, orange | |
-| KEY | the buttons held, as L, B, A, R | |
+| GRY | grey ramp left to right on the grid; arms red, green, blue, white, orange | `grid: grey ramp left to right; arms red, green, blue, white, orange` |
+| KEY | the buttons held, as L, B, A, R; no name first, so a press shows at once. Holding A still leaves the test | |
 | SCN | LED rows per second | `scan: 2930 rows/s` means the LED clock is the 48 MHz HCLK |
 | IR | sends a test packet every 2 s and counts how many it hears back (top: heard, bottom: sent) | `ir: heard 3 of 3 sent` |
 | PWR | USB or BAT, and CHG while charging | `power: USB (PC3 high), charging (CHRG low)` |
@@ -346,7 +361,7 @@ The LED test names the designator of every slot (from the KiCad board),
 so a dead LED or a swapped net shows up as "D35 should be on". The scan
 rate checks the one timing guess in the LED driver. The IR test hears the
 badge's own LED, so it tests sender and receiver together (it needs the
-receiver's supply fixed, see the hardware notes).
+IR LED and the receiver on the board).
 
 ## Setup page
 
@@ -361,8 +376,10 @@ badge. Then you can:
   entries EDIT NAME and LIGHT).
 - set the brightness.
 
-The page reads the badge's state every second, so changes made with the
-buttons show up on the page as well.
+The page reads the badge's state (what it shows, the brightness,
+charging) every second, so changes made with the buttons show up on the
+page as well. The name is read only when you connect: to see a name
+changed on the badge, connect again.
 
 On Linux, give your user access to the badge's USB ID (1209:D035), for
 example with this udev rule:
@@ -389,7 +406,7 @@ make -C c emu && python3 tools/emu/emu.py c
 | `↓` or `B` | B |
 | click | You can also click the buttons on the board. |
 | `C` | USB power on / off (charging) |
-| `R` | Reset (power on again) |
+| `R` | Reset (power on again). The firmware then starts without USB power, whatever the status line says: if `C` was on, press it twice |
 | `Esc` | Quit |
 
 The keys follow the same tap / hold / chord rules as the badge. Hold `↑`
@@ -411,7 +428,8 @@ sponsor reel. Without it, the emulator is a badge that has been through
 both.
 
 With `--web`, the emulator also serves the setup page on
-<http://localhost:8027/>. Click **Connect emulator** there: the page then
+<http://localhost:8027/> and opens it in the browser (`--no-browser`
+leaves that to you). Click **Connect emulator** there: the page then
 talks to the emulated badge the same way it talks to a real one over USB.
 
 The emulator needs Python with tkinter, numpy, scipy and Pillow. The

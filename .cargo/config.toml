@@ -2,7 +2,8 @@
 target = "riscv32imc-unknown-none-elf"
 
 [target.riscv32imc-unknown-none-elf]
-# The badge has no SWIO/SWCK pads, so flash over USB-C with the boot ROM
-# (see README, "Flashing"). With a debug probe on a dev board instead:
+# Flash over USB-C with the boot ROM and wchisp (see README, "Flashing").
+# With a WCH-LinkE on the SWD header J4 instead (1 SWIO PC18, 2 SWCK PC19,
+# 3 VCC, 4 GND; pin 3 is the badge's VCC, not 3.3 V):
 #   runner = "wlink flash --enable-sdi-print --watch-serial"
 runner = "wchisp flash"

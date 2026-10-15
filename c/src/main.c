@@ -1,4 +1,4 @@
-/* Hacker Hotel 2027 starfish badge: C port of the theoretical Rust/Embassy
+/* Hacker Hotel 2027 starfish badge: C port of the theoretical Rust
  * firmware, for comparison. Same hardware notes as ../../src/main.rs.
  *
  * One super-loop: SysTick runs free on HCLK/8 and the loop polls it to

@@ -2,7 +2,7 @@
 
 Same firmware as the Rust one in `../src`: LED map, LEDPWM driver (from
 the reference manual, same as Rust), the buttons, CHRG, the menu, the name tag with name entry (kept in
-flash), the hotel screen, the animations, all six games, the ◀ + ▶
+flash), the hotel screen, the animations, all ten games, the ◀ + ▶
 reboot into the USB boot ROM, a USB device for the WebUSB setup page
 (`src/usb.c`, `src/proto.c`), infrared name swapping with a UART log
 and console (`src/ir.c`, `src/irproto.c`, `src/uart.c`, `src/console.c`),
@@ -14,18 +14,22 @@ games in `src/games/`). The Rust
 firmware has all of these too.
 It is plain C on registers, with no WCH peripheral library and no libc. It runs as one
 super-loop scheduled on a free-running SysTick. Interrupts: the LED
-scanner at the end of each row, and for infrared the SysTick compare
-while sending and the receiver's edges.
+scanner at the end of each row, the UART's receive (into a ring buffer),
+and for infrared the SysTick compare while sending and the receiver's
+edges (EXTI line 19).
 
 ```sh
 make            # fetches WCH's SDK (startup, linker script, headers) on first run
 make NAME="ANNE JAN"   # the name tag text
 make size
 make flash      # wchisp over USB (see ../README.md, Flashing)
+make test       # host tests under ASan and UBSan (test/), with the PC's cc
 ```
 
 Needs a RISC-V GCC with rv32 libgcc; the default is the xPack
-`riscv-none-elf-gcc` (`CROSS=riscv-none-elf-`). `src/generated.{h,c}` come
+`riscv-none-elf-gcc` (`CROSS=riscv-none-elf-`). A `riscv64-elf-gcc`
+built without multilib (openSUSE's, for one) has no rv32 libgcc and does
+not link. `src/generated.{h,c}` come
 from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 ## Size compared with Rust
@@ -36,23 +40,25 @@ the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel and the challenges | 43.6 KB | 6.6 KB (+ 2 KB stack) |
-| Rust + Embassy, `opt-level = "z"` (the default) | 58.4 KB | 4.7 KB (+ stack) |
-| Rust + Embassy, `opt-level = "s"` | does not fit | |
+| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel and the challenges | 44.0 KB (45036 B) | 4.7 KB (+ 2 KB stack) |
+| Rust, `opt-level = "z"` (the default) | 52.0 KB (53256 B) | 2.2 KB (+ stack) |
+| Rust, `opt-level = "s"` | 57.7 KB (59062 B) | 2.2 KB (+ stack) |
 
-About 3 KB of the difference is the Embassy executor, time driver and HAL
-interrupt handlers, which the super-loop does not need. The rest is code
-size: the same code compiles about 1.5 times larger in Rust.
+The Rust firmware is a super-loop on the registers too now, so there is
+no runtime in the difference (Embassy and ch32-hal took about 5.6 KB
+before; see ../README.md, Size). The 8.0 KB that is left is code
+generation: panic paths, bounds checks and inlining make the same code
+about 1.18 times larger in Rust.
 
 C keeps its larger buffers static (Snake's demo path search, 688 bytes;
 the shared game-state union, 500 bytes), where Rust has them on the stack
-or inside the main task.
+(the App lives on main's stack, about 1.3 KB).
 
 Where the C flash goes (object sizes, before unused code is dropped):
 
 | Module | Code | Static RAM |
 |---|---|---|
-| app (menu, greeting, first boot) | 4403 | 124 |
+| app (menu, greeting, first boot) | 4429 | 124 |
 | anim (7 animations) | 3960 | 442 |
 | generated (LED tables, slot designators) | 3014 | 0 |
 | challenge (levels, progress, victory dance) | 2972 | 31 |
@@ -69,17 +75,17 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | frame (text, digits, MASK) | 1277 | 452 |
 | nametag | 1257 | 0 |
 | games/chase | 1230 | 0 |
+| ir (send, receive) | 1110 | 223 |
 | games/breakout | 1102 | 0 |
-| ir (send, receive) | 1058 | 223 |
 | games/simon | 929 | 0 |
 | editor (EDIT NAME) | 850 | 40 |
+| main | 809 | 0 |
+| store (name, progress, stage in flash) | 802 | 0 |
 | games/hilo | 790 | 0 |
-| main | 749 | 0 |
-| store (name, progress, stage in flash) | 742 | 0 |
 | games/flappy | 718 | 0 |
 | games/whack | 714 | 0 |
 | irproto (packets, pulse decoder) | 698 | 0 |
+| uart (log, line input on the RX interrupt) | 646 | 696 |
 | buttons | 574 | 25 |
+| ledpwm (scanner interrupt, row buffers) | 538 | 1032 |
 | proto (USB commands) | 530 | 0 |
-| uart (log, line input) | 524 | 566 |
-| ledpwm (scanner interrupt, row buffers) | 520 | 1031 |

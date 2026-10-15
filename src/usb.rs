@@ -31,7 +31,6 @@ const MS_VENDOR_CODE: u8 = 0x20;
 // register blocks (ch643.h)
 const USB: usize = 0x4002_3400; // USBFS, AHB + 0x3400
 const RCC: usize = 0x4002_1000;
-const PWR: usize = 0x4000_7000;
 const AFIO: usize = 0x4001_0000;
 const GPIOC: usize = 0x4001_1000;
 
@@ -88,18 +87,12 @@ const R_RES_ACK: u16 = 0;
 const R_RES_NAK: u16 = 1 << 3;
 const R_RES_STALL: u16 = 3 << 2;
 
-// RCC, PWR, AFIO, GPIO registers and bits (ch643.h)
+// RCC, AFIO, GPIO registers and bits (ch643.h)
 const RCC_AHBPCENR: usize = 0x14;
 const RCC_APB2PCENR: usize = 0x18;
-const RCC_APB1PCENR: usize = 0x1C;
 const RCC_USBFS: u32 = 0x0000_1000;
 const RCC_AFIOEN: u32 = 0x0000_0001;
 const RCC_IOPCEN: u32 = 0x0000_0010;
-const RCC_PWREN: u32 = 0x1000_0000;
-const PWR_CTLR: usize = 0x00;
-const PWR_CSR: usize = 0x04;
-const PWR_CTLR_PLS: u32 = 0x60;
-const PWR_CSR_PVDO: u32 = 0x04;
 const AFIO_CTLR: usize = 0x18;
 const AFIO_CTLR_UDM_PUE: u32 = 0x03;
 const AFIO_CTLR_UDP_PUE: u32 = 0x0C;
@@ -107,7 +100,6 @@ const AFIO_CTLR_USB_PHY_V33: u32 = 0x40;
 const AFIO_CTLR_USB_IOEN: u32 = 0x80;
 /// AFIO_CTLR: pull-up on D+ (PC17)
 const UDP_PUE_10K: u32 = 0x08;
-const UDP_PUE_1K5: u32 = 0x0C;
 const GPIO_CFGXR: usize = 0x1C;
 const GPIO_BSXR: usize = 0x20;
 
@@ -252,23 +244,18 @@ impl Usb {
     pub fn new() -> Self {
         set32a(RCC + RCC_AHBPCENR, RCC_USBFS);
         set32a(RCC + RCC_APB2PCENR, RCC_AFIOEN | RCC_IOPCEN);
-        set32a(RCC + RCC_APB1PCENR, RCC_PWREN);
-
-        // VDD is the battery, or about 4.7 V from USB through the diode. Like
-        // WCH's PWR_VDD_SupplyVoltage(): above PVD level 3 counts as 5 V.
-        w32a(PWR + PWR_CTLR, (r32a(PWR + PWR_CTLR) & !PWR_CTLR_PLS) | 0x60);
-        for i in 0..500u32 {
-            core::hint::black_box(i);
-        }
-        let five_volt = r32a(PWR + PWR_CSR) & PWR_CSR_PVDO == 0;
-        w32a(PWR + PWR_CTLR, r32a(PWR + PWR_CTLR) & !PWR_CTLR_PLS);
 
         // PC16 (D-) floating input, PC17 (D+) input with pull-up
         w32a(GPIOC + GPIO_CFGXR, (r32a(GPIOC + GPIO_CFGXR) & !0xFF) | 0x84);
         w32a(GPIOC + GPIO_BSXR, 1 << 1);
+        // Always the 5 V setup: the PHY behind its 3.3 V regulator, 10k on
+        // D+. VDD only comes from USB through the diode (about 4.7 V), so
+        // whenever there is a host to talk to, VDD is above 4 V. Choosing by
+        // VDD at boot (WCH's PWR_VDD_SupplyVoltage()) goes wrong when the
+        // badge starts on its battery and USB is plugged in later: the PHY
+        // would then drive D+ at VDD, above the 3.6 V USB allows.
         let ctlr = r32a(AFIO + AFIO_CTLR) & !(AFIO_CTLR_UDP_PUE | AFIO_CTLR_UDM_PUE | AFIO_CTLR_USB_PHY_V33);
-        let pull = if five_volt { UDP_PUE_10K } else { AFIO_CTLR_USB_PHY_V33 | UDP_PUE_1K5 };
-        w32a(AFIO + AFIO_CTLR, ctlr | AFIO_CTLR_USB_IOEN | pull);
+        w32a(AFIO + AFIO_CTLR, ctlr | AFIO_CTLR_USB_IOEN | UDP_PUE_10K);
 
         w8(BASE_CTRL, UC_RESET_SIE | UC_CLR_ALL);
         w8(BASE_CTRL, 0);

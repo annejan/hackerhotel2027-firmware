@@ -246,20 +246,21 @@ fn main() -> ! {
         since_save = since_save.saturating_add(1);
         if let Some(name) = pending.take_if(|_| since_save >= SAVE_FRAMES) {
             since_save = 0;
-            store::save(&name); // a page erase and program: a few ms
-            log::text("name saved: ");
+            // a page erase and program: a few ms
+            log::text(if store::save(&name) { "name saved: " } else { "name NOT saved (flash write failed): " });
             log::line(name.as_str());
         }
         if let Some(p) = app.progress() {
-            store::set_progress(p);
-            log::text("challenges: ");
+            log::text(if store::set_progress(p) { "challenges: " } else { "progress NOT saved, challenges: " });
             log::num(app.challenges().total() as u32);
             log::line(" of 25");
         }
         if let Some(next) = app.stage() {
             if next > stage {
                 // only forward: a re-run test does not bring the reel back
-                store::set_stage(next);
+                if !store::set_stage(next) {
+                    log::line("stage NOT saved (flash write failed)");
+                }
                 stage = next;
             }
         }

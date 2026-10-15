@@ -156,9 +156,9 @@ wchisp flash target/riscv32imc-unknown-none-elf/release/hh27-starfish
 ```
 
 `wchisp flash` erases whole 1 KiB sectors, one more than the image
-needs. Below 61440 bytes that leaves the last page (the name, the
+needs. Below 61440 bytes that leaves the last two pages (the name, the
 challenges' progress and the first-boot stage) alone; from 61440 bytes on,
-every update would wipe it. CI fails either firmware when it gets there.
+every update would wipe them. CI fails either firmware when it gets there.
 
 On Linux, give your user access to the boot ROM's USB ID (4348:55e0), for
 example with a udev rule:
@@ -190,7 +190,7 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `app.rs` | Menu, the list of screens, brightness, charging overlay |
 | `nametag.rs` | Name tag and Hacker Hotel 2027 screens, the `Name` type |
 | `editor.rs` | Name entry on the badge (EDIT NAME) |
-| `store.rs` | The name, the challenges' progress and the first-boot stage in flash (last 256-byte page; `memory.x` keeps code out of it) |
+| `store.rs` | The name, the challenges' progress and the first-boot stage in flash (the last two 256-byte pages, written in turns so a power cut during a save loses nothing; `memory.x` keeps code out of them) |
 | `anim.rs` | Animations: ripple, galaxy, heartbeat, life, fire, twinkle, charging |
 | `game.rs` | Game shell: demo mode, play, crash, score screen |
 | `games/` | Snake, Startris, Breakout, Pong, Flappy, Star Chase, Whack-a-mole, Simon, Maze, Higher lower |
@@ -238,18 +238,18 @@ bring-up test, the factory test and the sponsor reel), measured. The last
 256 bytes of flash are kept for the saved name, the challenges' progress
 and the first-boot stage.
 
-| | Flash (of 62 KB) | Static RAM (of 20 KB) |
+| | Flash (of 61.5 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **44.0 KB** (71%) | 4.7 KB + 2 KB stack |
-| Rust, `opt-level = "z"` (default) | **52.0 KB** (84%) | 2.2 KB + stack |
-| Rust, `opt-level = "s"` | 57.7 KB (93%) | 2.2 KB + stack |
+| C, GCC 15 `-Os` | **44.5 KB** (72%) | 4.7 KB + 2 KB stack |
+| Rust, `opt-level = "z"` (default) | **52.5 KB** (85%) | 2.2 KB + stack |
+| Rust, `opt-level = "s"` | 58.2 KB (95%) | 2.2 KB + stack |
 
 From `size`: flash is text + data, static RAM data + bss (C's bss
 includes its 2 KB stack, counted separately here). The Rust stack is not
 static: main's stack also holds the App, about 1.3 KB.
 
-Rust has 9.7 KB left, C 17.8 KB; below the 61440-byte point where
-`wchisp flash` would wipe the settings (see Flashing), 8.0 and 16.0 KB.
+Rust has 9.0 KB left, C 17.0 KB; below the 61440-byte point where
+`wchisp flash` would wipe the settings (see Flashing), 7.5 and 15.5 KB.
 The challenges (four games, the progress and the victory dance) cost
 7.6 KB in C (the dance with its stick figure and fireworks 2.9 KB, the
 maze 1.8 KB) and about 8.8 KB in Rust. The factory test and the sponsor
@@ -316,6 +316,8 @@ critical-section (34 crates in `Cargo.lock`, all from crates.io).
 
 ## Hardware notes found along the way
 
+What to check, in order, on the first prototype: **[docs/BRINGUP.md](docs/BRINGUP.md)**.
+
 - **Unbonded and unused pads.** WCH's SystemInit pulls up the pads that the
   LQFP64 package does not bond out (PC6–PC9, PC12, PC13, PC20); if they
   float they draw current. The firmware does it too, on the registers:
@@ -342,7 +344,12 @@ critical-section (34 crates in `Cargo.lock`, all from crates.io).
   factory test walks the grid in the order you see instead.
 - **No battery gauge.** The board has no battery-voltage sense, so the
   firmware can show *that* the battery charges but not *how full* it is.
+  Asked for: VBAT through a divider (2 × 1 MΩ, 100 nF on the middle) to
+  PC0 (ADC channel A10), which is free.
 - **USB on the registers.** `src/usb.rs` drives the USB block on its
   registers, as `c/src/usb.c` does (ch32-hal, which the Rust firmware
   used before, had no USB driver for the CH643); both are polled on every
-  pass of the main loop.
+  pass of the main loop. Both always use the 5 V PHY setup (its own 3.3 V
+  regulator, 10k on D+): USB only works when VDD comes from VBUS, so
+  choosing by VDD at boot would go wrong for a badge started on its
+  battery and plugged in later.

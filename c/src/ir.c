@@ -56,6 +56,21 @@ static struct {
     ir_dec_t dec;
 } rx;
 
+/* The whole 64-bit count. It is two 32-bit registers read one after the
+ * other; if the low word wraps in between, the result would be 716 s off
+ * (and a send would hang for that long), so read the high word again and
+ * retry when it moved. */
+static uint64_t now64(void)
+{
+    volatile uint32_t *c = (volatile uint32_t *)&SysTick->CNT;
+    uint32_t hi, lo;
+    do {
+        hi = c[1];
+        lo = c[0];
+    } while (c[1] != hi);
+    return (uint64_t)hi << 32 | lo;
+}
+
 /* write the high word first: the compare value only moves forward, so the
  * half-written value is in the future and cannot fire early */
 static void cmp_set(uint64_t v)
@@ -145,7 +160,7 @@ static void next_segment(void)
     /* a flash write stalls the CPU for ~5 ms, longer than any segment: if
      * the deadline has already gone by, the compare would never match and
      * the send would never end. The packet is spoilt anyway; finish it. */
-    uint64_t soon = SysTick->CNT + 5 * ticks_per_us;
+    uint64_t soon = now64() + 5 * ticks_per_us;
     if (tx.cmp < soon)
         tx.cmp = soon;
     cmp_set(tx.cmp);
@@ -169,7 +184,7 @@ bool ir_send(uint8_t type, const uint8_t *data, int len)
     tx.busy = true;
     TIM2->CNT = 0;
     TIM2->CTLR1 = TIM_ARPE | TIM_CEN;
-    tx.cmp = SysTick->CNT + 20 * ticks_per_us;
+    tx.cmp = now64() + 20 * ticks_per_us;
     cmp_set(tx.cmp);
     SysTick->SR = 0;
     SysTick->CTLR = STK_STE | STK_STIE;

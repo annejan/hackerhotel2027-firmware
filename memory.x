@@ -1,9 +1,9 @@
-/* CH643 memory, as ch32-metapac's, except that the code flash ends one
- * 256-byte page early: that page (0x0800F700 / 0x0000F700) keeps the
+/* CH643 memory, as ch32-metapac's, except that the code flash ends two
+ * 256-byte pages early: those pages (0x0800F600 and 0x0800F700) keep the
  * name, see src/store.rs. */
 MEMORY
 {
-    CODE   (rx)  : ORIGIN = 0x00000000, LENGTH =   62K - 256 /* USR boot alias */
+    CODE   (rx)  : ORIGIN = 0x00000000, LENGTH =   62K - 512 /* USR boot alias */
     USR    (rwx) : ORIGIN = 0x08000000, LENGTH =   62K
     SYS    (rwx) : ORIGIN = 0x1FFF0000, LENGTH =  3328
     VND    (r)   : ORIGIN = 0x1FFFF700, LENGTH =   256

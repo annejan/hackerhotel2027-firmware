@@ -23,10 +23,10 @@ jobs:
   firmware-c:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: xPack RISC-V GCC, riscv-none-elf- as c/Makefile expects
         id: gcc-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/xpack
           key: xpack-riscv-none-elf-gcc-${{ env.XPACK_GCC }}
@@ -37,7 +37,7 @@ jobs:
             | tar -xz -C ~/xpack
       - run: echo "$HOME/xpack/xpack-riscv-none-elf-gcc-$XPACK_GCC/bin" >> "$GITHUB_PATH"
       - name: WCH SDK
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: c/vendor
           key: wch-sdk-${{ hashFiles('c/Makefile') }}
@@ -45,10 +45,10 @@ jobs:
         run: make -C c
       - name: Flash size
         run: |
-          echo "| firmware | flash bytes | of 63232 | static RAM | limit |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| firmware | flash bytes | of 62976 | static RAM | limit |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
           SIZE=riscv-none-elf-size tools/ci/check_size.sh c/build/hh27.elf "$C_FLASH_LIMIT" C
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: hh27-c
           path: |
@@ -61,7 +61,7 @@ jobs:
   firmware-rust:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Rust toolchain from rust-toolchain.toml
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -69,10 +69,10 @@ jobs:
         run: cargo build --release --locked
       - name: Flash size
         run: |
-          echo "| firmware | flash bytes | of 63232 | static RAM | limit |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| firmware | flash bytes | of 62976 | static RAM | limit |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
           tools/ci/check_size.sh target/riscv32imc-unknown-none-elf/release/hh27-starfish "$RUST_FLASH_LIMIT" Rust
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: hh27-rust
           path: target/riscv32imc-unknown-none-elf/release/hh27-starfish
@@ -80,7 +80,7 @@ jobs:
   host-tests:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Rust toolchain from rust-toolchain.toml
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2

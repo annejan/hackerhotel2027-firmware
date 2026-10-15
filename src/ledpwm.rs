@@ -156,9 +156,12 @@ impl LedPwm {
         w8(FRAME_CFG, INHIBIT_4); // ~5 us between rows, no repeats
         w8(KEY_CTRL, 0x00);
         w8(FUNC_CTRL, IE_INHIBIT | PWM_OE_CLR | LED_ENABLE);
-        unsafe { qingke::pfic::enable_interrupt(crate::pac::Interrupt::LEDPWM as u8) };
+        // row 0 first, then the interrupt: loading the row clears a flag the
+        // idle block may already have raised, so the handler cannot run
+        // before it and start on row 1 while row 0 is being loaded
         COM.store(0, Ordering::Relaxed);
         load_row(0);
+        unsafe { qingke::pfic::enable_interrupt(crate::pac::Interrupt::LEDPWM as u8) };
         Self { stalled: false }
     }
 

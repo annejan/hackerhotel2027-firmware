@@ -61,7 +61,6 @@
 
 /* AFIO_CTLR: PC16/PC17 as USB, pull-up on D+ */
 #define UDP_PUE_10K 0x08
-#define UDP_PUE_1K5 0x0C
 
 /* the 96-bit unique ID, as on the CH32X035 (GUESS for the CH643) */
 #define UID ((const volatile uint32_t *)0x1FFFF7E8)
@@ -147,21 +146,18 @@ void usb_init(void)
 {
     RCC->AHBPCENR |= RCC_USBFS;
     RCC->APB2PCENR |= RCC_AFIOEN | RCC_IOPCEN;
-    RCC->APB1PCENR |= RCC_PWREN;
-
-    /* VDD is the battery, or about 4.7 V from USB through the diode. Like
-     * WCH's PWR_VDD_SupplyVoltage(): above PVD level 3 counts as 5 V. */
-    PWR->CTLR = (PWR->CTLR & ~PWR_CTLR_PLS) | 0x60;
-    for (volatile int i = 0; i < 500; i++)
-        ;
-    bool five_volt = !(PWR->CSR & PWR_CSR_PVDO);
-    PWR->CTLR &= ~PWR_CTLR_PLS;
 
     /* PC16 (D-) floating input, PC17 (D+) input with pull-up */
     GPIOC->CFGXR = (GPIOC->CFGXR & ~0xFFu) | 0x84;
     GPIOC->BSXR = 1u << 1;
+    /* Always the 5 V setup: the PHY behind its 3.3 V regulator, 10k on D+.
+     * VDD only comes from USB through the diode (about 4.7 V), so whenever
+     * there is a host to talk to, VDD is above 4 V. Choosing by VDD at boot
+     * (WCH's PWR_VDD_SupplyVoltage()) goes wrong when the badge starts on
+     * its battery and USB is plugged in later: the PHY would then drive D+
+     * at VDD, above the 3.6 V USB allows. */
     uint32_t ctlr = AFIO->CTLR & ~(AFIO_CTLR_UDP_PUE | AFIO_CTLR_UDM_PUE | AFIO_CTLR_USB_PHY_V33);
-    AFIO->CTLR = ctlr | AFIO_CTLR_USB_IOEN | (five_volt ? UDP_PUE_10K : AFIO_CTLR_USB_PHY_V33 | UDP_PUE_1K5);
+    AFIO->CTLR = ctlr | AFIO_CTLR_USB_IOEN | UDP_PUE_10K;
 
     USBFSD->BASE_CTRL = UC_RESET_SIE | UC_CLR_ALL;
     USBFSD->BASE_CTRL = 0;

@@ -13,9 +13,20 @@ static void end_of_row(void)
     LEDPWM_IRQHandler();
 }
 
+/* row 0 must be loaded before the interrupt can run */
+static int row0_at_enable = -1;
+static void on_enable(int n)
+{
+    if (n == LEDPWM_IRQn)
+        row0_at_enable = LEDPWM->COM_SEL == COM_SEL_PB0 && LEDPWM->PWM_OE == 1 && LEDPWM->DMA_CNT == ROW_WORDS;
+}
+
 int main(void)
 {
+    fake_on_enable = on_enable;
     ledpwm_init();
+    fake_on_enable = 0;
+    CHECK(row0_at_enable == 1, "row 0 is loaded before the LEDPWM interrupt is enabled");
     CHECK(fake_gpioa.CFGLR == 0x33333333 && fake_gpioa.CFGHR == 0x33333333 && fake_gpioa.CFGXR == 0x33333333 &&
               fake_gpioa.BCR == 0xFFFFFF,
           "PA0..PA23 push-pull outputs, low");

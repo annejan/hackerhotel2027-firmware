@@ -40,9 +40,9 @@ the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel and the challenges | 44.0 KB (45036 B) | 4.7 KB (+ 2 KB stack) |
-| Rust, `opt-level = "z"` (the default) | 52.0 KB (53256 B) | 2.2 KB (+ stack) |
-| Rust, `opt-level = "s"` | 57.7 KB (59062 B) | 2.2 KB (+ stack) |
+| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel and the challenges | 44.5 KB (45544 B) | 4.7 KB (+ 2 KB stack) |
+| Rust, `opt-level = "z"` (the default) | 52.5 KB (53724 B) | 2.2 KB (+ stack) |
+| Rust, `opt-level = "s"` | 58.2 KB (59578 B) | 2.2 KB (+ stack) |
 
 The Rust firmware is a super-loop on the registers too now, so there is
 no runtime in the difference (Embassy and ch32-hal took about 5.6 KB
@@ -68,19 +68,19 @@ Where the C flash goes (object sizes, before unused code is dropped):
 | sponsors (sponsor reel, logos) | 2173 | 12 |
 | games/snake | 1788 | 688 |
 | games/maze | 1770 | 0 |
-| usb (driver, descriptors) | 1737 | 326 |
+| usb (driver, descriptors) | 1665 | 326 |
 | game (shell) | 1597 | 516 |
 | console | 1412 | 0 |
 | games/pong | 1290 | 0 |
 | frame (text, digits, MASK) | 1277 | 452 |
 | nametag | 1257 | 0 |
+| store (name, progress, stage in two flash pages) | 1240 | 0 |
 | games/chase | 1230 | 0 |
-| ir (send, receive) | 1110 | 223 |
+| ir (send, receive) | 1164 | 223 |
 | games/breakout | 1102 | 0 |
+| main | 965 | 0 |
 | games/simon | 929 | 0 |
 | editor (EDIT NAME) | 850 | 40 |
-| main | 809 | 0 |
-| store (name, progress, stage in flash) | 802 | 0 |
 | games/hilo | 790 | 0 |
 | games/flappy | 718 | 0 |
 | games/whack | 714 | 0 |

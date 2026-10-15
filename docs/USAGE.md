@@ -185,8 +185,9 @@ characters long.
 
 If you press nothing for a minute, the editor closes and does not save.
 
-The name is kept in the last 256-byte page of flash, so it is still there
-after you switch off. A firmware update with `wchisp flash` keeps it;
+The name is kept in flash, so it is still there after you switch off.
+Two pages take turns, so even a flat battery in the middle of a save
+keeps the name you had before. A firmware update with `wchisp flash` keeps it;
 `wchisp erase` clears it. Saving to flash is not tested on a badge yet.
 
 A new name, from EDIT NAME, the console or the setup page, is written to
@@ -254,8 +255,8 @@ Pin 3 of J3 is the badge's VCC (battery or USB), not
 A freshly flashed badge starts with a short factory test, made for
 volunteers at the flashing table: about 30 seconds per badge, pass or
 fail, no serial terminal needed. It comes back at every power-on until it
-has passed once. The badge keeps that in flash, in the same page as the
-name. A later `wchisp flash` keeps that page, so an update does not bring
+has passed once. The badge keeps that in flash, with the name. A later
+`wchisp flash` keeps it, so an update does not bring
 the test back; `wchisp erase` does. To run it again on purpose, type
 `factory` on the UART console.
 

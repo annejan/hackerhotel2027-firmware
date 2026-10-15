@@ -106,9 +106,12 @@ void ledpwm_init(void)
     LEDPWM->FRAME_CFG = INHIBIT(4); /* ~5 us between rows, no repeats */
     LEDPWM->KEY_CTRL = 0x00;
     LEDPWM->FUNC_CTRL = IE_INHIBIT | PWM_OE_CLR | LED_ENABLE;
-    NVIC_EnableIRQ(LEDPWM_IRQn);
+    /* row 0 first, then the interrupt: loading the row clears a flag the
+     * idle block may already have raised, so the handler cannot run before
+     * it and start on row 1 while row 0 is being loaded */
     com = 0;
     load_row(0);
+    NVIC_EnableIRQ(LEDPWM_IRQn);
 }
 
 void ledpwm_show(uint8_t brightness)

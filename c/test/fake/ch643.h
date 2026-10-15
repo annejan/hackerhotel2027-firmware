@@ -58,6 +58,13 @@ extern uint32_t SystemCoreClock;
 #define TIM_MOE 0x8000
 
 enum { SysTicK_IRQn = 12, LEDPWM_IRQn = 19, EXTI25_16_IRQn = 41 };
-/* NVIC_EnableIRQ(n) sets fake_nvic[n] */
+/* NVIC_EnableIRQ(n) sets fake_nvic[n], and calls fake_on_enable when a
+ * test wants to look at the registers at that moment */
 extern uint8_t fake_nvic[64];
-static inline void NVIC_EnableIRQ(int n) { fake_nvic[n] = 1; }
+extern void (*fake_on_enable)(int n);
+static inline void NVIC_EnableIRQ(int n)
+{
+    fake_nvic[n] = 1;
+    if (fake_on_enable)
+        fake_on_enable(n);
+}

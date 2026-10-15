@@ -100,17 +100,17 @@ int main(void)
         if (name_pending && ticks() - last_save >= save_gap) {
             name_pending = false;
             last_save = ticks();
-            store_save(&name); /* a page erase and program: a few ms */
-            log_str("name saved: ");
+            /* a page erase and program: a few ms */
+            log_str(store_save(&name) ? "name saved: " : "name NOT saved (flash write failed): ");
             log_line(name.s);
         }
         if (challenge_take_changed()) {
-            store_set_progress(challenge_packed());
-            log_str("challenges: ");
+            log_str(store_set_progress(challenge_packed()) ? "challenges: " : "progress NOT saved, challenges: ");
             log_u32((uint32_t)challenge_total());
             log_line(" of 25");
         }
-        if (app_stage(&stage) && stage > store_stage())
-            store_set_stage(stage); /* only forward: a re-run test does not bring the reel back */
+        /* only forward: a re-run test does not bring the reel back */
+        if (app_stage(&stage) && stage > store_stage() && !store_set_stage(stage))
+            log_line("stage NOT saved (flash write failed)");
     }
 }

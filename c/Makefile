@@ -55,10 +55,10 @@ build/%.c.o: %.c | build vendor/ch643
 build/%.S.o: %.S | build vendor/ch643
 	$(CC) $(ARCH) -x assembler-with-cpp -c $< -o $@
 
-# WCH's linker script, with the code flash one 256-byte page shorter: that
-# page keeps the name (src/store.c)
+# WCH's linker script, with the code flash two 256-byte pages shorter: those
+# pages keep the name (src/store.c)
 build/link.ld: | build vendor/ch643
-	sed 's/LENGTH = 62K/LENGTH = 62K - 256/' $(SDK)/Ld/Link.ld > $@
+	sed 's/LENGTH = 62K/LENGTH = 62K - 512/' $(SDK)/Ld/Link.ld > $@
 
 build/hh27.elf: $(OBJS) build/link.ld
 	$(CC) $(LDFLAGS) $(OBJS) -lgcc -o $@

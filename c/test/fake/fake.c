@@ -11,3 +11,4 @@ LEDPWM_TypeDef fake_ledpwm;
 FLASH_TypeDef fake_flash;
 uint32_t SystemCoreClock = 48000000;
 uint8_t fake_nvic[64];
+void (*fake_on_enable)(int n);

@@ -18,7 +18,6 @@ use crate::frame::{draw_number, draw_text, Frame, Rgb};
 use crate::generated::{COMS, EDGE, GRID_H, GRID_W, PWM_CHANNELS, RGB, SLOTS, SLOT_REF};
 use crate::irproto;
 use crate::log;
-use crate::nametag::Name;
 use crate::Event;
 
 const NAMES: [&str; 9] = ["COM", "PWM", "LED", "ALL", "GRY", "KEY", "SCN", "IR", "PWR"];
@@ -177,7 +176,7 @@ impl Selftest {
     }
 
     /// One frame. `ir_out` takes a packet to send (main.rs passes it on).
-    pub fn render(&mut self, f: &mut Frame, held: u8, hw: Hw, level: usize, charging: bool, ir_out: &mut Option<(u8, Name)>) {
+    pub fn render(&mut self, f: &mut Frame, held: u8, hw: Hw, level: usize, charging: bool, ir_out: &mut Option<irproto::Packet>) {
         let now = self.t;
         self.t += 1;
         let name = NAMES[self.test as usize];
@@ -260,7 +259,7 @@ impl Selftest {
             }
             IR => {
                 if now % IR_EVERY == 0 && ir_out.is_none() {
-                    *ir_out = Some((irproto::TEST, Name::new(b"TEST")));
+                    *ir_out = Some(irproto::Packet::new(irproto::TEST, b"TEST"));
                     self.ir_sent += 1;
                     log::text("ir: test packet ");
                     log::num(self.ir_sent as u32);

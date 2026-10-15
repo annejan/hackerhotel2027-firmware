@@ -8,14 +8,15 @@ with no HAL. It compiles, but it has never run on a board.
 |---|---|---|---|---|
 | ![hotel](docs/fw/hotel.gif) | ![startris](docs/fw/startris.gif) | ![breakout](docs/fw/breakout.gif) | ![star chase](docs/fw/chase.gif) | ![name swap](docs/fw/swap.gif) |
 | ![whack-a-mole](docs/fw/whack.gif) | ![simon](docs/fw/simon.gif) | ![maze](docs/fw/maze.gif) | ![higher lower](docs/fw/hilo.gif) | ![challenge progress](docs/fw/progress.gif) |
-| ![victory dance](docs/fw/victory.gif) | ![factory test](docs/fw/factory.gif) | ![sponsor reel](docs/fw/sponsors.gif) | ![bring-up test](docs/fw/selftest.gif) | |
+| ![victory dance](docs/fw/victory.gif) | ![factory test](docs/fw/factory.gif) | ![sponsor reel](docs/fw/sponsors.gif) | ![bring-up test](docs/fw/selftest.gif) | ![4 in a row](docs/fw/four.gif) |
 | ![ripple](docs/anim/ripple.gif) | ![galaxy](docs/anim/galaxy.gif) | ![fire](docs/anim/fire.gif) | ![heartbeat](docs/anim/heartbeat.gif) | |
 
 Top three rows: recorded from the firmware itself, running on the PC
 (`tools/fwsim`; the name swap from two C emulators), drawn on a KiCad
 render of the board with the real LED positions: games and screens, the
 challenge games and the progress on the name tag, the victory dance, the
-factory test, the sponsor reel and the bring-up test. Bottom row: the
+factory test, the sponsor reel, the bring-up test and 4 in a row
+against the badge. Bottom row: the
 Python animation sketches the firmware ports.
 
 ## Using the badge
@@ -32,6 +33,7 @@ every game, the name tag and the emulator. The short version:
 | **Challenges** | five games, one per arm, five levels each; the name tag's arms show your progress, and all 25 earn the victory dance ([details](docs/USAGE.md#challenges)) |
 | **Hold ◀ + ▶, 3 s** | reboot into the USB boot ROM for flashing |
 | **B** on the name tag | send your name over infrared; a badge that gets it says HI with your name and sends its own back |
+| **4 IN A ROW** | against another badge over infrared (open it on both and point them at each other), or against the badge ([details](docs/USAGE.md#4-in-a-row-against-another-badge)) |
 | **First power-on** | a freshly flashed badge runs a 30 s pass / fail factory test for the flashing table, and the power-on after it passed plays the sponsor reel once ([details](docs/USAGE.md#factory-test-the-flashing-table)) |
 | **Hold A + B, 3 s** | bring-up test for a new board: COM / PWM / LED walks with designators on the UART, scan rate, IR loopback, power ([details](docs/USAGE.md#bring-up-test-first-boards)) |
 
@@ -193,7 +195,7 @@ the badge: the SWD header gets it back with a WCH-LinkE.
 | `store.rs` | The name, the challenges' progress and the first-boot stage in flash (the last two 256-byte pages, written in turns so a power cut during a save loses nothing; `memory.x` keeps code out of them) |
 | `anim.rs` | Animations: ripple, galaxy, heartbeat, life, fire, twinkle, charging |
 | `game.rs` | Game shell: demo mode, play, crash, score screen |
-| `games/` | Snake, Startris, Breakout, Pong, Flappy, Star Chase, Whack-a-mole, Simon, Maze, Higher lower |
+| `games/` | Snake, Startris, Breakout, Pong, Flappy, Star Chase, Whack-a-mole, Simon, Maze, Higher lower, 4 in a row (also between two badges over infrared) |
 | `challenge.rs` | The five challenges (levels, progress on the arms) and the victory dance |
 | `frame.rs` | Frame buffer, text and digits, integer HSV, sine, RNG |
 | `font.rs` | 5x7 font (` `..`Z`), 3x5 digits |
@@ -215,10 +217,11 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 | | |
 |---|---|
 | `tools/emu` | Live emulator for either firmware, built as a shared library (see Emulator); `--web` serves the setup page against it (and opens it in the browser, unless `--no-browser`); `--fresh` starts as a freshly flashed badge (factory test, then sponsor reel); emulators share infrared, stdin is the UART console |
-| `tools/fwsim` | `cargo test` runs 16 tests: the name editor, label scrolling, browsing, name clean-up, console commands, the USB protocol (also fuzzed), the IR decoder on edge-timed pulses, the challenge levels, and the four challenge games played to level 5. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random presses in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
+| `tools/fwsim` | `cargo test` runs 19 tests: the name editor, label scrolling, browsing, name clean-up, console commands, the USB protocol (also fuzzed), the IR decoder on edge-timed pulses, the challenge levels, the four challenge games played to level 5, and 4 in a row's rules and play. Runs the firmware's hardware-independent modules (app, menu, games, animations) on the PC, from the same sources. `soak` plays every item with random presses in a debug build, where integer overflow and out-of-range indexing panic; `record` writes frames for `fwgif.py`. Also builds the Rust library for the emulator. Run it from its own directory: `cd tools/fwsim && cargo run -- soak` |
 | `tools/emu/parity.py` | Runs the C and Rust emulator libraries side by side and compares them frame for frame, on the screens that use no random numbers |
-| `c/test` | `make -C c test`: C host tests under ASan and UBSan. The drivers (buttons, ir, ledpwm, store) against fake registers, the app through its interface (names, editor, infrared, console, factory test, USB, browsing), the challenges played to level 5, and a 200 000-frame soak |
-| `.github/workflows/ci.yml` | CI: builds both firmwares and fails when either is over 61440 bytes of flash (see Flashing), runs the C tests, the fwsim tests and soak, and the parity check |
+| `tools/emu/ir_game.py` | Two emulated badges play 4 in a row over infrared, for every pairing of C and Rust, also over a link that loses 30% of the packets; both must pair up and agree on every move and the result |
+| `c/test` | `make -C c test`: C host tests under ASan and UBSan. The drivers (buttons, ir, ledpwm, store) against fake registers, the app through its interface (names, editor, infrared, console, factory test, USB, browsing), the challenges played to level 5, 4 in a row (rules, the badge's play, the infrared side), and a 200 000-frame soak |
+| `.github/workflows/ci.yml` | CI: builds both firmwares and fails when either is over 61440 bytes of flash (see Flashing), runs the C tests, the fwsim tests and soak, the parity check and the infrared game |
 | `tools/sim/logo.py` | Sponsor logos: `assets/sponsors/*.svg` to greyscale bitmaps for the grid (`c/src/logos.h`, `src/logos.rs`); needs Inkscape and scipy |
 | `tools/sim/fwgif.py` | Turns a `fwsim record` (or frames from the C emulator library) into a GIF on the board render |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
@@ -232,24 +235,26 @@ ffmpeg.
 ## Size
 
 Everything above (name tag and name entry, hotel screen, menu, 6
-animations, 10 games, the challenges and the victory dance, the USB boot
-gesture, the USB device, the infrared name swap, the UART console, the
-bring-up test, the factory test and the sponsor reel), measured. The last
-256 bytes of flash are kept for the saved name, the challenges' progress
-and the first-boot stage.
+animations, 11 games, the challenges and the victory dance, the USB boot
+gesture, the USB device, the infrared name swap and 4 in a row, the UART
+console, the bring-up test, the factory test and the sponsor reel),
+measured. The last 512 bytes of flash are kept for the saved name, the
+challenges' progress and the first-boot stage.
 
 | | Flash (of 61.5 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **44.5 KB** (72%) | 4.7 KB + 2 KB stack |
-| Rust, `opt-level = "z"` (default) | **52.5 KB** (85%) | 2.2 KB + stack |
-| Rust, `opt-level = "s"` | 58.2 KB (95%) | 2.2 KB + stack |
+| C, GCC 15 `-Os` | **47.3 KB** (77%) | 4.7 KB + 2 KB stack |
+| Rust, `opt-level = "z"` (default) | **57.0 KB** (93%) | 2.2 KB + stack |
+| Rust, `opt-level = "s"` | does not fit any more | |
 
 From `size`: flash is text + data, static RAM data + bss (C's bss
 includes its 2 KB stack, counted separately here). The Rust stack is not
 static: main's stack also holds the App, about 1.3 KB.
 
-Rust has 9.0 KB left, C 17.0 KB; below the 61440-byte point where
-`wchisp flash` would wipe the settings (see Flashing), 7.5 and 15.5 KB.
+Rust has 4.5 KB left, C 14.2 KB; below the 61440-byte point where
+`wchisp flash` would wipe the settings (see Flashing), 3.0 and 12.7 KB.
+4 in a row costs 2.9 KB in C and about 4.5 KB in Rust (with the packet
+type the infrared queue now uses).
 The challenges (four games, the progress and the victory dance) cost
 7.6 KB in C (the dance with its stick figure and fireworks 2.9 KB, the
 maze 1.8 KB) and about 8.8 KB in Rust. The factory test and the sponsor
@@ -271,7 +276,7 @@ Infrared and the UART console add 4.8 KB (IR driver 1.1 KB, pulse codec
 and 0.9 KB of RAM, mostly the UART's 512-byte send and 128-byte receive
 buffers.
 
-Rust is 8.0 KB (8220 bytes, 1.18 times) larger than C for the same
+Rust is 9.7 KB (9886 bytes, 1.20 times) larger than C for the same
 features, with no runtime left to account for it: the gap is code
 generation in the app code (panic paths, bounds checks, inlining).
 Until the bare-metal rewrite the Rust firmware ran on Embassy with

@@ -20,6 +20,7 @@
 typedef enum {
     GAME_SNAKE, GAME_STARTRIS, GAME_BREAKOUT, GAME_PONG, GAME_FLAPPY, GAME_CHASE,
     GAME_WHACK, GAME_SIMON, GAME_MAZE, GAME_HILO, /* the challenges' own games (challenge.h) */
+    GAME_FOUR, /* four in a row, also against another badge over infrared */
     GAMES
 } game_kind_t;
 
@@ -35,6 +36,8 @@ bool game_event(event_t ev, uint8_t arg);
 bool game_playing(void);
 /* one frame into fb[]; held = buttons down right now */
 void game_render(uint8_t held);
+/* a game packet from another badge (IR_FOUR) */
+void game_ir(const uint8_t *data, int len);
 
 /* helpers for the games */
 /* light arm `arm`'s first n LEDs (centre outward) in c */

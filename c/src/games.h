@@ -110,6 +110,21 @@ typedef struct {
     uint16_t streak, t;
 } hilo_t;
 
+#define FOUR_W 7
+#define FOUR_H 6
+typedef struct {
+    uint8_t cell[FOUR_H][FOUR_W]; /* 0, or the player (1 moves first, 2) | WIN_BIT */
+    uint8_t moves[FOUR_W * FOUR_H]; /* the columns, in order */
+    uint8_t n, last;        /* moves made; the last disc, row * FOUR_W + column */
+    uint8_t cursor, me;     /* the column aimed at; we are player me + 1 */
+    uint8_t mode, game;     /* SEEK / LOCAL / LINK; the infrared game's number */
+    uint8_t heard;          /* the other badge has our moves up to this one */
+    uint8_t answer_in;      /* frames until we answer the other badge, 0 = no */
+    uint8_t winner;         /* 0, the player, or 3 for a draw */
+    uint8_t end;            /* frames of the result shown */
+    uint16_t resend_in, quiet, since; /* frames to the next send; without an answer; since the last move */
+} four_t;
+
 extern union game_state {
     snake_t snake;
     startris_t startris;
@@ -121,6 +136,7 @@ extern union game_state {
     simon_t simon;
     maze_t maze;
     hilo_t hilo;
+    four_t four;
 } game_state;
 
 #define GAME_FNS(name)                                  \
@@ -139,5 +155,10 @@ GAME_FNS(whack)
 GAME_FNS(simon)
 GAME_FNS(maze)
 GAME_FNS(hilo)
+GAME_FNS(four)
 bool pong_won(void);
 bool maze_won(void);
+bool four_won(void);
+/* an infrared packet for four in a row; live = a real game is running.
+ * Returns true for an invitation that should start one. */
+bool four_ir(bool live, const uint8_t *data, int len);

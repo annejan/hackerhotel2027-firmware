@@ -64,7 +64,7 @@ enum Item {
     Light,
 }
 
-const ITEMS: [(Item, &str); 21] = [
+const ITEMS: [(Item, &str); 22] = [
     (Item::Name, "NAME"),
     (Item::Hotel, "HACKER HOTEL"),
     (Item::Ripple, "RIPPLE"),
@@ -83,6 +83,7 @@ const ITEMS: [(Item, &str); 21] = [
     (Item::Game(Kind::Simon), "SIMON"),
     (Item::Game(Kind::Maze), "MAZE"),
     (Item::Game(Kind::Hilo), "HIGHER LOWER"),
+    (Item::Game(Kind::Four), "4 IN A ROW"),
     (Item::Victory, "VICTORY"),
     (Item::EditName, "EDIT NAME"),
     (Item::Light, "LIGHT"),
@@ -112,7 +113,7 @@ pub struct App {
     editor: Option<Editor>,
     saved: Option<Name>,
     // infrared
-    ir_out: Option<(u8, Name)>, // a packet waiting for the IR driver
+    ir_out: Option<irproto::Packet>, // a packet waiting for the IR driver
     beam: u32,                  // > 0: frames left of the "sending" sweep
     reply_in: u32,              // > 0: frames until we answer a HELLO
     greet_pending: bool,
@@ -386,6 +387,11 @@ impl App {
     }
 
     /// Progress kept in flash, at power on.
+    /// Mix `v` (the chip's unique ID) into the random generator.
+    pub fn seed(&mut self, v: u32) {
+        self.rng.seed(v);
+    }
+
     pub fn load_progress(&mut self, packed: u16) {
         self.challenges.load(packed);
     }
@@ -443,14 +449,14 @@ impl App {
         if self.ir_out.is_some() {
             return false;
         }
-        self.ir_out = Some((irproto::HELLO, self.name));
+        self.ir_out = Some(irproto::Packet::new(irproto::HELLO, self.name.bytes()));
         self.beam = FPS;
         log::line("ir: hello sent");
         true
     }
 
     /// A packet to send, for main.rs to hand to the IR driver.
-    pub fn ir_take(&mut self) -> Option<(u8, Name)> {
+    pub fn ir_take(&mut self) -> Option<irproto::Packet> {
         self.ir_out.take()
     }
 
@@ -466,6 +472,12 @@ impl App {
                 test.ir_heard();
             } else if let Some(factory) = self.factory.as_mut() {
                 factory.ir_heard();
+            }
+            return;
+        }
+        if ty == irproto::FOUR {
+            if self.in_game() && !self.busy_elsewhere() {
+                self.game.ir_received(data, &mut self.rng);
             }
             return;
         }
@@ -486,25 +498,32 @@ impl App {
         self.greet_pending = true;
     }
 
+    /// The menu, EDIT NAME, a test, the reel or the dance has the screen.
+    fn busy_elsewhere(&self) -> bool {
+        self.menu.is_some()
+            || self.editor.is_some()
+            || self.test.is_some()
+            || self.factory.is_some()
+            || self.reel.is_some()
+            || self.dance
+    }
+
     fn ir_tick(&mut self) {
         if self.reply_in > 0 {
             self.reply_in -= 1;
             if self.reply_in == 0 {
                 if self.ir_out.is_none() {
-                    self.ir_out = Some((irproto::REPLY, self.name));
+                    self.ir_out = Some(irproto::Packet::new(irproto::REPLY, self.name.bytes()));
                     log::line("ir: reply sent");
                 } else {
                     self.reply_in = 1; // still sending something: next frame
                 }
             }
         }
-        let busy = self.menu.is_some()
-            || self.editor.is_some()
-            || self.test.is_some()
-            || self.factory.is_some()
-            || self.reel.is_some()
-            || self.dance
-            || (self.in_game() && self.game.playing());
+        if self.ir_out.is_none() {
+            self.ir_out = self.game.ir_take();
+        }
+        let busy = self.busy_elsewhere() || (self.in_game() && self.game.playing());
         if self.greet_pending && !busy {
             self.greet_pending = false;
             self.greeting = true;

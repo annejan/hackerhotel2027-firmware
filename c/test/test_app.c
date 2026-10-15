@@ -178,7 +178,7 @@ static void console(void)
     init_name("ME");
     log_clear();
     console_line("help");
-    CHECK(logged("  0 NAME") && logged("  20 LIGHT") && !logged("  21 "), "help lists the 21 items");
+    CHECK(logged("  0 NAME") && logged("  18 4 IN A ROW") && logged("  21 LIGHT") && !logged("  22 "), "help lists the 22 items");
     log_clear();
     console_line("  info");
     CHECK(logged("c firmware, name \"ME\", showing 0 NAME, level 2"), "info, after leading blanks [%s]", stub_log);
@@ -186,7 +186,7 @@ static void console(void)
     log_clear();
     console_line("show 3");
     CHECK(app_item() == 3 && logged("showing 3 GALAXY"), "show 3 [%s]", stub_log);
-    static const char *const bad[] = {"show", "show x", "show 3x", "show -1", "show 21", "show 99999999999",
+    static const char *const bad[] = {"show", "show x", "show 3x", "show -1", "show 22", "show 99999999999",
                                       "level 5", "level", "factoryskip", "showx 1", "", "HELP"};
     for (unsigned i = 0; i < sizeof bad / sizeof bad[0]; i++) {
         log_clear();

@@ -25,7 +25,6 @@ use crate::frame::{draw_number, draw_text, Frame, Rgb};
 use crate::generated::{COMS, EDGE, GRID, GRID_W, PWM_CHANNELS, RGB};
 use crate::irproto;
 use crate::log;
-use crate::nametag::Name;
 use crate::selftest::Hw;
 use crate::Event;
 
@@ -158,7 +157,7 @@ impl Factory {
     }
 
     /// One frame. `ir_out` takes a packet to send (main.rs passes it on).
-    pub fn render(&mut self, f: &mut Frame, hw: Hw, charging: bool, ir_out: &mut Option<(u8, Name)>) -> Status {
+    pub fn render(&mut self, f: &mut Frame, hw: Hw, charging: bool, ir_out: &mut Option<irproto::Packet>) -> Status {
         let now = self.t;
         self.t += 1;
         match self.state {
@@ -249,7 +248,7 @@ impl Factory {
             }
             _ => {
                 if t % IR_EVERY == 0 && ir_out.is_none() {
-                    *ir_out = Some((irproto::TEST, Name::new(b"TEST")));
+                    *ir_out = Some(irproto::Packet::new(irproto::TEST, b"TEST"));
                     self.ir_sent += 1;
                 }
                 draw_number(f, self.ir_heard, 2, 255);

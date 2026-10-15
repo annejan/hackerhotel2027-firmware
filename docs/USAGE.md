@@ -67,8 +67,9 @@ The items, in order:
    animations.
 4. **SNAKE**, **STARTRIS**, **BREAKOUT**, **PONG**, **FLAPPY**,
    **STAR CHASE**, **WHACK-A-MOLE**, **SIMON**, **MAZE**,
-   **HIGHER LOWER**: games. Five of them are the
-   [challenges](#challenges).
+   **HIGHER LOWER**, **4 IN A ROW**: games. Five of them are the
+   [challenges](#challenges); 4 in a row can also be played against
+   [another badge](#4-in-a-row-against-another-badge).
 5. **VICTORY**: the victory dance, once you have done all the challenges.
    Until then it shows how far you are (out of 25).
 6. **EDIT NAME**: type your name on the badge, see [Your name](#your-name).
@@ -124,6 +125,7 @@ the game.
 | **Simon** | The badge lights a sequence on the four legs that have a button: ◀ lower left, ▶ lower right, A upper right, B upper left (A and B are on the back of those arms). Press it back. | The length you repeated. Each round adds one. The top arm fills as you enter the sequence, and lights green for 0.6 s when you got it all. A wrong button, or 5 s without one, ends the game. |
 | **Maze** | You stay in the middle of the grid and the maze moves around you; only the walls close by are lit. ◀ / ▶ left / right, B up, A down (hold to repeat). The arm that lights up points towards the exit, in the far corner. | Five mazes, from 5 x 5 to 13 x 13 cells, each with a time limit (15 s, then 8 s more per maze) shown on the outline. The side LEDs of an arm turn green for every maze solved. |
 | **Higher lower** | A number from 1 to 99. Will the next one be higher (▶, its leg lights green) or lower (◀, red)? | Your streak of right guesses fills the outline, 5 LEDs a point. One wrong guess and the game is over. |
+| **4 in a row** | Seven columns, six high. ◀ / ▶ move your disc along the top, B drops it. Four of yours in a line (across, up or diagonal) wins. Your discs are bright, the other side's dim; the arms are green on your turn, orange on theirs. Against the badge, or [another badge](#4-in-a-row-against-another-badge). | When you win: the discs you had left in hand (up to 17). |
 
 The playing field is the octagon in the middle, and its edge is the wall.
 
@@ -221,6 +223,25 @@ met. Tap any button to close a greeting early.
 
 A greeting waits while the menu or EDIT NAME is open or a game is being
 played, and shows when you are done. The answer goes out straight away.
+
+### 4 in a row against another badge
+
+Open **4 IN A ROW** on both badges and point them at each other. Press
+◀, ▶ or B on one of them: its arms sweep blue while it looks for a
+partner, and the other badge joins by itself (it only needs to show the
+game, even its demo). The badge that asked moves first; the UART log
+says `four: linked, you start` or `they start`. If you drop a disc
+before another badge answers, you play against your own badge instead.
+
+Each move goes over infrared as soon as you make it, and again every
+0.8 s until the other badge has it, so keep the badges pointed at each
+other. While it is the other player's turn, your badge checks every 3 s
+that theirs is still there; after 20 s without an answer (they walked
+off, or opened the menu) the game ends with `four: link lost`. Both logs
+end with the result and every move, for example
+`four: you win, moves 4455463` (columns 1 to 7).
+
+![4 in a row against the badge](fw/four.gif)
 
 Not tested on a badge yet. It needs a board with the IR LED and the
 receiver fitted. The receiver's missing supply is fixed in hardware

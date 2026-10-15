@@ -57,3 +57,8 @@ void emu_console(const char *line);
  * emu_init starts the factory test, the boot after it passed plays the
  * sponsor reel. (By default the emulator is a badge past both.) */
 void emu_fresh(void);
+
+/* Optional: mix v into the random generator, as the badge does with its
+ * chip's unique ID; two emulators playing each other over IR need
+ * different ones. */
+void emu_seed(uint32_t v);

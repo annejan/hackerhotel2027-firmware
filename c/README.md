@@ -36,19 +36,20 @@ from `../tools/gen_layout.py`, which writes the Rust and C tables together.
 
 Same features in both (the bring-up test is 2.8 KB in C, plus 0.75 KB for
 the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
-2.2 KB with its five logos, the challenges 7.6 KB with their four games and the dance).
+2.2 KB with its five logos, the challenges 7.6 KB with their four games and the dance,
+4 in a row 2.9 KB with its infrared play).
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel and the challenges | 44.5 KB (45544 B) | 4.7 KB (+ 2 KB stack) |
-| Rust, `opt-level = "z"` (the default) | 52.5 KB (53724 B) | 2.2 KB (+ stack) |
-| Rust, `opt-level = "s"` | 58.2 KB (59578 B) | 2.2 KB (+ stack) |
+| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel, the challenges and 4 in a row | 47.3 KB (48468 B) | 4.7 KB (+ 2 KB stack) |
+| Rust, `opt-level = "z"` (the default) | 57.0 KB (58354 B) | 2.2 KB (+ stack) |
+| Rust, `opt-level = "s"` | does not fit any more | |
 
 The Rust firmware is a super-loop on the registers too now, so there is
 no runtime in the difference (Embassy and ch32-hal took about 5.6 KB
-before; see ../README.md, Size). The 8.0 KB that is left is code
+before; see ../README.md, Size). The 9.7 KB that is left is code
 generation: panic paths, bounds checks and inlining make the same code
-about 1.18 times larger in Rust.
+about 1.2 times larger in Rust.
 
 C keeps its larger buffers static (Snake's demo path search, 688 bytes;
 the shared game-state union, 500 bytes), where Rust has them on the stack
@@ -58,27 +59,28 @@ Where the C flash goes (object sizes, before unused code is dropped):
 
 | Module | Code | Static RAM |
 |---|---|---|
-| app (menu, greeting, first boot) | 4429 | 124 |
+| app (menu, greeting, first boot) | 4531 | 124 |
 | anim (7 animations) | 3960 | 442 |
 | generated (LED tables, slot designators) | 3014 | 0 |
 | challenge (levels, progress, victory dance) | 2972 | 31 |
+| games/four (4 in a row, also over infrared) | 2921 | 0 |
 | selftest (bring-up test) | 2834 | 44 |
 | games/startris | 2556 | 0 |
 | factory (factory test) | 2440 | 37 |
 | sponsors (sponsor reel, logos) | 2173 | 12 |
 | games/snake | 1788 | 688 |
 | games/maze | 1770 | 0 |
+| game (shell) | 1721 | 516 |
 | usb (driver, descriptors) | 1665 | 326 |
-| game (shell) | 1597 | 516 |
 | console | 1412 | 0 |
+| frame (text, digits, MASK) | 1307 | 452 |
 | games/pong | 1290 | 0 |
-| frame (text, digits, MASK) | 1277 | 452 |
 | nametag | 1257 | 0 |
 | store (name, progress, stage in two flash pages) | 1240 | 0 |
 | games/chase | 1230 | 0 |
 | ir (send, receive) | 1164 | 223 |
 | games/breakout | 1102 | 0 |
-| main | 965 | 0 |
+| main | 1001 | 0 |
 | games/simon | 929 | 0 |
 | editor (EDIT NAME) | 850 | 40 |
 | games/hilo | 790 | 0 |

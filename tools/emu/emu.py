@@ -103,7 +103,16 @@ class Firmware:
             lib.emu_console.argtypes = [ctypes.c_char_p]
         if fresh and hasattr(lib, "emu_fresh"):
             lib.emu_fresh()
-        lib.emu_init()
+        # each badge mixes its chip ID into its random numbers; two
+        # emulators playing over IR need different ones too
+        self.seed = int.from_bytes(os.urandom(4), "little")
+        self.init()
+
+    def init(self):
+        """Power on (again)."""
+        self.lib.emu_init()
+        if hasattr(self.lib, "emu_seed"):
+            self.lib.emu_seed(ctypes.c_uint32(self.seed))
 
     def usb(self, packet):
         """One packet of the badge's USB protocol; returns the reply."""
@@ -385,7 +394,7 @@ class App:
             self.fw.event(CHARGING, int(self.charging))
             self.say("USB power " + ("on: charging" if self.charging else "off"))
         elif e.keysym.lower() == "r":
-            self.fw.lib.emu_init()
+            self.fw.init()
             self.say("reset")
         elif e.keysym == "Escape":
             self.root.destroy()
@@ -421,7 +430,7 @@ class App:
         rebooted, frame = self.fw.render(held)
         if rebooted:
             self.say("USB boot ROM: ready for `wchisp flash` (powering on again)", 3)
-            self.fw.lib.emu_init()
+            self.fw.init()
             rebooted, frame = self.fw.render(0)
         b = self.fw.lib.emu_brightness()
         # show brightness the way it feels: night mode dim but visible

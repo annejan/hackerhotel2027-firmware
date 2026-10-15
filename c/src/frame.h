@@ -87,4 +87,7 @@ void draw_number(uint16_t n, int row, uint8_t v);
 
 /* xorshift32, good enough for sparkles and fire */
 uint32_t rng_next(void);
+/* mix v into the generator: the chip's unique ID, so that two badges do
+ * not draw the same numbers (and send over IR at the same moments) */
+void rng_seed(uint32_t v);
 static inline uint8_t rng_byte(void) { return (uint8_t)(rng_next() >> 24); }

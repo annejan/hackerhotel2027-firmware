@@ -100,3 +100,5 @@ jobs:
           (cd tools/fwsim && cargo build --release --locked --lib)
       - name: C / Rust parity
         run: python3 tools/emu/parity.py c/build/libhh27.so tools/fwsim/target/*/release/libfwsim.so
+      - name: Four in a row over infrared, every pairing of C and Rust badges
+        run: python3 tools/emu/ir_game.py c/build/libhh27.so tools/fwsim/target/*/release/libfwsim.so

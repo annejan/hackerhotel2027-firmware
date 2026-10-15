@@ -3,6 +3,7 @@
 mod breakout;
 mod chase;
 mod flappy;
+mod four;
 mod hilo;
 mod maze;
 mod pong;
@@ -14,6 +15,7 @@ mod whack;
 pub use breakout::Breakout;
 pub use chase::Chase;
 pub use flappy::Flappy;
+pub use four::Four;
 pub use hilo::Hilo;
 pub use maze::Maze;
 pub use pong::Pong;

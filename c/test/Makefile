@@ -23,7 +23,7 @@ PURE := app anim console editor frame generated game irproto proto selftest fact
 PURE_SRCS := $(PURE:%=$(SRC)/%.c) $(wildcard $(SRC)/games/*.c)
 HDRS := $(wildcard $(SRC)/*.h) $(wildcard *.h fake/*.h)
 
-TESTS := buttons ir ledpwm store app challenge soak
+TESTS := buttons ir ledpwm store app challenge four soak
 
 all: $(TESTS:%=$(OUT)/test_%)
 	@set -e; for t in $(TESTS); do \
@@ -45,6 +45,9 @@ $(OUT)/test_app: test_app.c stubs.c $(PURE_SRCS) $(HDRS) | $(OUT)
 	$(HOSTCC) $(CFLAGS) test_app.c stubs.c $(PURE_SRCS) -o $@
 $(OUT)/test_challenge: test_challenge.c stubs.c $(PURE_SRCS) $(HDRS) | $(OUT)
 	$(HOSTCC) $(CFLAGS) test_challenge.c stubs.c $(PURE_SRCS) -o $@
+# includes games/four.c itself, to reach its state
+$(OUT)/test_four: test_four.c stubs.c $(PURE_SRCS) $(HDRS) | $(OUT)
+	$(HOSTCC) $(CFLAGS) test_four.c stubs.c $(filter-out $(SRC)/games/four.c,$(PURE_SRCS)) -o $@
 $(OUT)/test_soak: test_soak.c $(C)/emu/emu.c $(PURE_SRCS) $(HDRS) | $(OUT)
 	$(HOSTCC) $(CFLAGS) test_soak.c $(C)/emu/emu.c $(PURE_SRCS) -o $@
 

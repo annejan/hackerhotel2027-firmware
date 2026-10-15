@@ -148,10 +148,10 @@ fn record(path: &str, frames: u32, script: &[String]) {
         }
         f.clear();
         a.render(&mut f, held);
-        if let Some((ty, name)) = a.ir_take() {
+        if let Some(out) = a.ir_take() {
             if a.ir_loopback() {
                 let mut p = [0u8; fwsim::irproto::PACKET_MAX];
-                let n = fwsim::irproto::pack(ty, name.bytes(), &mut p);
+                let n = fwsim::irproto::pack(out.ty, out.data(), &mut p);
                 echo = Some(p[..n].to_vec());
             }
         }

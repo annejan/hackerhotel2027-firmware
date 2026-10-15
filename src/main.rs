@@ -185,6 +185,9 @@ fn main() -> ! {
     log::line("Type help.");
     let mut stage = store::stage();
     let mut app = first_app(name, stage, store::progress());
+    // the chip's unique ID, so that two badges draw different random numbers
+    let uid = |k: usize| unsafe { read_volatile((0x1FFF_F7E8 + 4 * k) as *const u32) };
+    app.seed(uid(0) ^ uid(1) ^ uid(2));
     let mut ir = ir::Ir::new();
     let mut uart = uart::Uart::new();
     let mut usb = usb::Usb::new();
@@ -206,8 +209,8 @@ fn main() -> ! {
             ir.poll(|ty, data| app.ir_received(ty, data));
             ir.set_loopback(app.ir_loopback());
             if !ir.busy() {
-                if let Some((ty, name)) = app.ir_take() {
-                    ir.send(ty, name.bytes());
+                if let Some(p) = app.ir_take() {
+                    ir.send(p.ty, p.data());
                 }
             }
         }

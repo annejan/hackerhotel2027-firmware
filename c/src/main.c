@@ -56,6 +56,8 @@ int main(void)
 
     ledpwm_init();
     buttons_init();
+    const volatile uint32_t *uid = (const volatile uint32_t *)0x1FFFF7E8;
+    rng_seed(uid[0] ^ uid[1] ^ uid[2]);
     name_t name;
     if (!store_load(&name))
         name_default(&name);

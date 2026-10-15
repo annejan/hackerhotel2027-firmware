@@ -137,6 +137,13 @@ pub extern "C" fn emu_fresh() {
 }
 
 #[no_mangle]
+pub extern "C" fn emu_seed(v: u32) {
+    if let Some(e) = EMU.lock().unwrap().as_mut() {
+        e.app.seed(v);
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn emu_abi() -> u32 {
     1
 }
@@ -221,9 +228,9 @@ pub unsafe extern "C" fn emu_render(held: u8, out: *mut u8) -> u32 {
     keep_flash(&mut e.app);
     // what main.rs's IR task does: take a packet for the "LED"
     if e.ir_out.is_none() {
-        if let Some((ty, name)) = e.app.ir_take() {
+        if let Some(out) = e.app.ir_take() {
             let mut p = [0u8; irproto::PACKET_MAX];
-            let n = irproto::pack(ty, name.bytes(), &mut p);
+            let n = irproto::pack(out.ty, out.data(), &mut p);
             if e.app.ir_loopback() {
                 e.ir_echo = Some(p[..n].to_vec());
             }
@@ -436,7 +443,7 @@ mod tests {
     #[test]
     fn usb_protocol() {
         let mut a = app::App::new(Name::new(b"ANNE JAN"));
-        assert_eq!(usb(&mut a, &[1]), [1, proto::VERSION, 21, 5, nametag::MAX as u8, b'r']);
+        assert_eq!(usb(&mut a, &[1]), [1, proto::VERSION, 22, 5, nametag::MAX as u8, b'r']);
         assert_eq!(usb(&mut a, &[2]), b"\x02\x08ANNE JAN");
         // SET NAME cleans up, replies with the clean name, and saves it
         assert_eq!(usb(&mut a, b"\x03\x0ehacker  hotel "), b"\x03\x0dHACKER  HOTEL");
@@ -448,9 +455,9 @@ mod tests {
         // state, items, levels
         assert_eq!(usb(&mut a, &[4]), [4, 0, 2, 0]);
         assert_eq!(usb(&mut a, &[5, 9]), [4, 9, 2, 0]);
-        assert_eq!(usb(&mut a, &[5, 19]), [0xFF, 5], "EDIT NAME is menu only");
-        assert_eq!(usb(&mut a, &[5, 20]), [0xFF, 5], "LIGHT is menu only");
-        assert_eq!(usb(&mut a, &[5, 21]), [0xFF, 5]);
+        assert_eq!(usb(&mut a, &[5, 20]), [0xFF, 5], "EDIT NAME is menu only");
+        assert_eq!(usb(&mut a, &[5, 21]), [0xFF, 5], "LIGHT is menu only");
+        assert_eq!(usb(&mut a, &[5, 22]), [0xFF, 5]);
         assert_eq!(usb(&mut a, &[5]), [0xFF, 5]);
         assert_eq!(usb(&mut a, &[6, 4]), [4, 9, 4, 0]);
         assert_eq!(usb(&mut a, &[6, 5]), [0xFF, 6]);
@@ -459,7 +466,7 @@ mod tests {
         // labels
         assert_eq!(usb(&mut a, &[7, 13]), b"\x07\x0d\x0aSTAR CHASE");
         assert_eq!(usb(&mut a, &[7, 16]), b"\x07\x10\x04MAZE");
-        assert_eq!(usb(&mut a, &[7, 21]), [0xFF, 7]);
+        assert_eq!(usb(&mut a, &[7, 22]), [0xFF, 7]);
         // unknown command, empty packet
         assert_eq!(usb(&mut a, &[0x42, 1, 2]), [0xFF, 0x42]);
         assert_eq!(usb(&mut a, &[]), [0xFF, 0]);

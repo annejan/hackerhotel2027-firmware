@@ -103,6 +103,15 @@ impl Rng {
         Self(if seed == 0 { 0x1234_5678 } else { seed })
     }
 
+    /// Mix `v` into the generator: the chip's unique ID, so that two badges
+    /// do not draw the same numbers (and send over IR at the same moments).
+    pub fn seed(&mut self, v: u32) {
+        self.0 ^= v;
+        if self.0 == 0 {
+            self.0 = 0x2027_5EA5;
+        }
+    }
+
     pub fn next(&mut self) -> u32 {
         let mut x = self.0;
         x ^= x << 13;

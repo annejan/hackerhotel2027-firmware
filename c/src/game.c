@@ -30,6 +30,7 @@ static const game_ops_t OPS_TABLE[GAMES] = {
     [GAME_SIMON] = {OPS(simon), 0, false},
     [GAME_MAZE] = {OPS(maze), maze_won, true},
     [GAME_HILO] = {OPS(hilo), 0, true},
+    [GAME_FOUR] = {OPS(four), four_won, false},
 };
 
 enum { RUN, CRASH, SCORE };
@@ -85,6 +86,17 @@ bool game_event(event_t ev, uint8_t arg)
         return !g.demo;
     default:
         return false;
+    }
+}
+
+void game_ir(const uint8_t *data, int len)
+{
+    if (g.kind != GAME_FOUR)
+        return;
+    bool live = !g.demo && g.state == RUN;
+    if (four_ir(live, data, len)) { /* invited: start a real game and join */
+        restart(false);
+        four_ir(true, data, len);
     }
 }
 

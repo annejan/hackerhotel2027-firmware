@@ -56,6 +56,8 @@ EXPORT void emu_init(void)
         app_sponsors();
 }
 /* as if just flashed: the factory test, then the sponsor reel */
+EXPORT void emu_seed(uint32_t v) { rng_seed(v); }
+
 EXPORT void emu_fresh(void)
 {
     flash_stage = STAGE_NEW;

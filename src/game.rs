@@ -9,7 +9,8 @@
 use crate::anim::FPS;
 use crate::frame::{draw_number, hsv, Frame, Rgb, Rng};
 use crate::challenge::Challenges;
-use crate::games::{Breakout, Chase, Flappy, Hilo, Maze, Pong, Simon, Snake, Startris, Whack};
+use crate::games::{Breakout, Chase, Flappy, Four, Hilo, Maze, Pong, Simon, Snake, Startris, Whack};
+use crate::irproto::Packet;
 use crate::generated::{EDGE, RGB};
 use crate::Event;
 
@@ -55,6 +56,7 @@ pub enum Kind {
     Simon,
     Maze,
     Hilo,
+    Four, // four in a row, also against another badge over infrared
 }
 
 /// The running game; only one exists at a time, so they share this slot.
@@ -69,6 +71,7 @@ enum Body {
     Simon(Simon),
     Maze(Maze),
     Hilo(Hilo),
+    Four(Four),
 }
 
 macro_rules! each {
@@ -84,6 +87,7 @@ macro_rules! each {
             Body::Simon($g) => $e,
             Body::Maze($g) => $e,
             Body::Hilo($g) => $e,
+            Body::Four($g) => $e,
         }
     };
 }
@@ -105,6 +109,7 @@ impl Body {
             Kind::Simon => Body::Simon(Simon::new(rng)),
             Kind::Maze => Body::Maze(Maze::new(rng)),
             Kind::Hilo => Body::Hilo(Hilo::new(rng)),
+            Kind::Four => Body::Four(Four::new(rng)),
         }
     }
 }
@@ -159,6 +164,24 @@ impl Game {
             Event::Tap(_) | Event::Hold(_) => !self.demo,
             Event::Charging(_) | Event::Bootloader | Event::Selftest => false,
         }
+    }
+
+    /// A game packet from another badge (`irproto::FOUR`).
+    pub fn ir_received(&mut self, data: &[u8], rng: &mut Rng) {
+        let live = !self.demo && self.state == State::Run;
+        let Body::Four(g) = &mut self.body else { return };
+        if g.ir(live, data, rng) {
+            // invited: start a real game and join
+            self.restart(false, rng);
+            if let Body::Four(g) = &mut self.body {
+                g.ir(true, data, rng);
+            }
+        }
+    }
+
+    /// A packet the game wants to send.
+    pub fn ir_take(&mut self) -> Option<Packet> {
+        if let Body::Four(g) = &mut self.body { g.ir_take() } else { None }
     }
 
     /// `ch` hears about every real game's score.

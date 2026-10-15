@@ -57,7 +57,7 @@ enum {
 static const char *const LABELS[ITEMS] = {
     "NAME", "HACKER HOTEL", "RIPPLE", "GALAXY", "HEART", "LIFE", "FIRE", "TWINKLE",
     "SNAKE", "STARTRIS", "BREAKOUT", "PONG", "FLAPPY", "STAR CHASE",
-    "WHACK-A-MOLE", "SIMON", "MAZE", "HIGHER LOWER", "VICTORY", "EDIT NAME", "LIGHT",
+    "WHACK-A-MOLE", "SIMON", "MAZE", "HIGHER LOWER", "4 IN A ROW", "VICTORY", "EDIT NAME", "LIGHT",
 };
 
 /* brightness steps, as a share of full PWM duty (applied after gamma):
@@ -346,6 +346,11 @@ void app_ir_received(uint8_t type, const uint8_t *data, int len)
             selftest_ir(data, len);
         else if (a.factory)
             factory_ir();
+        return;
+    }
+    if (type == IR_FOUR) {
+        if (is_game(a.item) && !a.menu && !a.editing && !a.testing && !a.factory && !a.reel && !a.dance)
+            game_ir(data, len);
         return;
     }
     if (type != IR_HELLO && type != IR_REPLY)

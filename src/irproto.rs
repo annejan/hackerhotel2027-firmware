@@ -25,6 +25,29 @@ pub const PACKET_MAX: usize = DATA_MAX + 3;
 pub const HELLO: u8 = b'H'; // data = the sender's name; please reply
 pub const REPLY: u8 = b'R'; // data = the sender's name, answering a HELLO
 pub const TEST: u8 = b'T'; // the bring-up test's loopback packet
+pub const FOUR: u8 = b'F'; // four in a row: game, move, column, flags (games/four.rs)
+
+/// A packet waiting to go out: its type and data.
+#[derive(Clone, Copy)]
+pub struct Packet {
+    pub ty: u8,
+    len: u8,
+    buf: [u8; DATA_MAX],
+}
+
+impl Packet {
+    /// `data` beyond DATA_MAX is cut off.
+    pub fn new(ty: u8, data: &[u8]) -> Self {
+        let len = data.len().min(DATA_MAX);
+        let mut buf = [0; DATA_MAX];
+        buf[..len].copy_from_slice(&data[..len]);
+        Self { ty, len: len as u8, buf }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.buf[..self.len as usize]
+    }
+}
 
 fn crc8(p: &[u8]) -> u8 {
     let mut c = 0u8;

@@ -66,6 +66,12 @@ static void ctlr(uint32_t set, uint32_t clear)
 
 static void program(const uint32_t *page)
 {
+    /* the page is good for ~100k erases: never spend one on no change */
+    int same = 1;
+    for (int i = 0; i < 64; i++)
+        same &= word(i) == page[i];
+    if (same)
+        return;
     FLASH->KEYR = KEY1;
     FLASH->KEYR = KEY2;
     FLASH->MODEKEYR = KEY1; /* fast (page) mode */

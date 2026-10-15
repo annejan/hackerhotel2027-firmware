@@ -82,6 +82,9 @@ void ir_init(void)
     TIM2->CHCTLR1 = (uint16_t)((TIM2->CHCTLR1 & 0xFF00) | 0x0060 | TIM_OC1PE);
     TIM2->CH1CVR = 0;
     TIM2->CCER = (uint16_t)((TIM2->CCER & ~0x000Fu) | TIM_CC1E | TIM_CC1P);
+    /* TIM2 is an advanced timer on the CH643 (RM ch. 12, "TIM1/TIM2"): no
+     * output at all until the main output enable is set */
+    TIM2->BDTR = TIM_MOE;
     TIM2->SWEVGR = TIM_UG;
     /* PB21 high first (LED off) and alternate push-pull (0b1011), PB19
      * floating input (R35 pulls it up), PB23 (no longer used) input with
@@ -139,6 +142,12 @@ static void next_segment(void)
     }
     TIM2->CH1CVR = mark ? carrier_on : 0;
     tx.cmp += us * ticks_per_us;
+    /* a flash write stalls the CPU for ~5 ms, longer than any segment: if
+     * the deadline has already gone by, the compare would never match and
+     * the send would never end. The packet is spoilt anyway; finish it. */
+    uint64_t soon = SysTick->CNT + 5 * ticks_per_us;
+    if (tx.cmp < soon)
+        tx.cmp = soon;
     cmp_set(tx.cmp);
 }
 

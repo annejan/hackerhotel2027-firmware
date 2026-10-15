@@ -117,6 +117,10 @@ pub fn set_stage(stage: Stage) {
 }
 
 fn program(page: &[u32; 64]) {
+    // the page is good for ~100k erases: never spend one on no change
+    if page.iter().enumerate().all(|(i, &w)| word(i) == w) {
+        return;
+    }
     critical_section::with(|_| {
         FLASH.keyr().write(|w| w.0 = KEY1);
         FLASH.keyr().write(|w| w.0 = KEY2);

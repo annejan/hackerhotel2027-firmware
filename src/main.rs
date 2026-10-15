@@ -204,6 +204,10 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(usb_device().unwrap());
     let mut frame = Frame::new();
     let mut ticker = Ticker::every(Duration::from_hz(anim::FPS as u64));
+    // at most one name save per SAVE_FRAMES: a script renaming the badge
+    // over USB must not wear out the page; the last name always gets saved
+    let mut pending = None;
+    let mut since_save = SAVE_FRAMES;
 
     loop {
         while let Ok(ev) = EVENTS.try_receive() {
@@ -221,6 +225,11 @@ async fn main(spawner: Spawner) -> ! {
             with_app(|app| app.handle(ev));
         }
         if let Some(name) = with_app(|app| app.saved_name()) {
+            pending = Some(name);
+        }
+        since_save = since_save.saturating_add(1);
+        if let Some(name) = pending.take_if(|_| since_save >= SAVE_FRAMES) {
+            since_save = 0;
             store::save(&name); // a page erase and program: a few ms
             log::text("name saved: ");
             log::line(name.as_str());
@@ -248,6 +257,9 @@ async fn main(spawner: Spawner) -> ! {
         ticker.next().await;
     }
 }
+
+/// Five seconds between name saves.
+const SAVE_FRAMES: u16 = 5 * anim::FPS as u16;
 
 /// The app at power on: a new badge starts with the factory test, one
 /// that just passed it with the sponsor reel. Not inside main: a local App

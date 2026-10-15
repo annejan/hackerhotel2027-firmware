@@ -22,7 +22,7 @@ rgb_t hsv(uint8_t h, uint8_t s, uint8_t v)
     }
 }
 
-static uint32_t rng_state = 0x2027u * 0x5EA5u;
+static uint32_t rng_state = 0x20275EA5u; /* same seed as the Rust app */
 
 uint32_t rng_next(void)
 {

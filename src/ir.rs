@@ -44,6 +44,7 @@ const CNT: usize = 0x24;
 const PSC: usize = 0x28;
 const ATRLR: usize = 0x2C;
 const CH1CVR: usize = 0x34;
+const BDTR: usize = 0x44;
 
 const CEN: u16 = 0x0001;
 const URS: u16 = 0x0004;
@@ -55,6 +56,7 @@ const UG: u16 = 0x0001;
 const OC1PE: u16 = 0x0008;
 const CC1E: u16 = 0x0001;
 const CC1P: u16 = 0x0002;
+const MOE: u16 = 0x8000;
 
 const TIM1: usize = 0x4001_2C00;
 const TIM2: usize = 0x4000_0000;
@@ -215,6 +217,9 @@ impl Ir {
         wr(TIM2, CHCTLR1, (rd(TIM2, CHCTLR1) & 0xFF00) | 0x0060 | OC1PE);
         wr(TIM2, CH1CVR, 0);
         wr(TIM2, CCER, (rd(TIM2, CCER) & !0x000F) | CC1E | CC1P);
+        // TIM2 is an advanced timer on the CH643 (RM ch. 12, "TIM1/TIM2"):
+        // no output at all until the main output enable is set
+        wr(TIM2, BDTR, MOE);
         wr(TIM2, SWEVGR, UG);
 
         // TIM3: 1 MHz, one-shot per segment, update interrupt

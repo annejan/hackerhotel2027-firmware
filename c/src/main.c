@@ -21,6 +21,7 @@
 #include "uart.h"
 #include "usb.h"
 
+#define SAVE_MS 5000
 #define CHRG_PIN 22 /* PB22, XT4054 CHRG: open-drain, low while charging */
 
 /* PC3 sees VBUS (through R33 to GND): high while USB powers the badge */
@@ -73,6 +74,11 @@ int main(void)
         app_sponsors();
 
     uint32_t next_buttons = ticks(), next_chrg = ticks(), next_frame = ticks();
+    /* at most one name save per SAVE_MS: a script renaming the badge over
+     * USB must not wear out the page; the last name always gets saved */
+    const uint32_t save_gap = SAVE_MS * tick_ms;
+    uint32_t last_save = ticks() - save_gap;
+    bool name_pending = false;
     int charging = -1;
     for (;;) {
         usb_poll();
@@ -89,7 +95,11 @@ int main(void)
             app_render(buttons_held);
             ledpwm_show(app_brightness());
         }
-        if (app_saved_name(&name)) {
+        if (app_saved_name(&name))
+            name_pending = true;
+        if (name_pending && ticks() - last_save >= save_gap) {
+            name_pending = false;
+            last_save = ticks();
             store_save(&name); /* a page erase and program: a few ms */
             log_str("name saved: ");
             log_line(name.s);

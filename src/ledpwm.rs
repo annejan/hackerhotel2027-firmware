@@ -122,7 +122,8 @@ fn LEDPWM() {
 }
 
 pub struct LedPwm {
-    _private: (),
+    /// The last frame never got picked up: the scanner is not running.
+    stalled: bool,
 }
 
 impl LedPwm {
@@ -159,19 +160,24 @@ impl LedPwm {
         unsafe { qingke::pfic::enable_interrupt(hal::pac::Interrupt::LEDPWM as u8) };
         COM.store(0, Ordering::Relaxed);
         load_row(0);
-        Self { _private: () }
+        Self { stalled: false }
     }
 
     /// Gamma-correct `frame` and hand it to the scanner; `brightness`
     /// (0..=255) sets the intensity PWM.
     pub fn show(&mut self, frame: &Frame, brightness: u8) {
         // the last frame is still waiting for the start of a scan (5.5 ms at
-        // most); give up after a while instead of hanging if the scanner stopped
-        for _ in 0..200_000 {
-            if !PENDING.load(Ordering::Acquire) {
-                break;
+        // most); give up after a while instead of hanging if the scanner
+        // stopped, and once it has stopped do not wait again: every 30 ms
+        // spent spinning here would starve the other tasks
+        if !self.stalled {
+            for _ in 0..200_000 {
+                if !PENDING.load(Ordering::Acquire) {
+                    break;
+                }
             }
         }
+        self.stalled = PENDING.load(Ordering::Acquire);
         let inten = match brightness >> 2 {
             0 if brightness > 0 => 1,
             v => v as u32,

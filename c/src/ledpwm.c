@@ -114,9 +114,13 @@ void ledpwm_init(void)
 void ledpwm_show(uint8_t brightness)
 {
     /* the last frame is still waiting for the start of a scan (5.5 ms at
-     * most); give up after a while instead of hanging if the scanner stopped */
-    for (uint32_t i = 0; pending && i < 200000; i++)
+     * most); give up after a while instead of hanging if the scanner stopped,
+     * and once it has stopped do not wait again: every 30 ms spent spinning
+     * here would starve USB, the UART and the buttons */
+    static bool stalled;
+    for (uint32_t i = 0; pending && !stalled && i < 200000; i++)
         ;
+    stalled = pending;
     uint8_t inten = brightness >> 2; /* 6-bit intensity */
     if (brightness && !inten)
         inten = 1;

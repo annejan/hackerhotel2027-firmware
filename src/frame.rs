@@ -190,13 +190,15 @@ pub fn draw_number(f: &mut Frame, n: u16, row: usize, v: u8) {
             break;
         }
     }
-    let c0 = (GRID_W - (len * 4 - 1)) / 2;
+    // five digits are 19 columns, two more than the grid: start at -1
+    let c0 = (GRID_W as isize - (len * 4 - 1) as isize) / 2;
     for k in 0..len {
         let rows = font::digit3x5(digits[len - 1 - k]);
         for (r, bits) in rows.iter().enumerate() {
             for c in 0..3 {
-                if bits >> (2 - c) & 1 != 0 {
-                    f.grid(row + r, c0 + k * 4 + c, v);
+                let col = c0 + (k * 4 + c) as isize;
+                if bits >> (2 - c) & 1 != 0 && col >= 0 {
+                    f.grid(row + r, col as usize, v);
                 }
             }
         }

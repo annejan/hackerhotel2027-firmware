@@ -95,7 +95,7 @@ static void reel_done(void);
 
 static bool is_game(int i)
 {
-    return i >= FIRST_GAME && i < EDIT_NAME;
+    return i >= FIRST_GAME && i < VICTORY;
 }
 
 static void select_item(int i)
@@ -314,6 +314,8 @@ void app_factory_skip(void)
 
 void app_sponsors(void)
 {
+    if (a.testing || a.factory) /* cut short: their IR loopback must go too */
+        ir_loopback(false);
     a.menu = a.editing = a.show_charge = a.greeting = a.testing = a.factory = false;
     a.reel = true;
     log_line("sponsor reel");

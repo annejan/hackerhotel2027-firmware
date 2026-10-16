@@ -1,6 +1,6 @@
 /* Reboot into the CH643's factory boot ROM, which speaks WCH's ISP protocol
- * over USB: a way to update the badge with only a USB cable. (The SWD
- * header J4 works too, with a WCH-LinkE.)
+ * over USB: a way to update the badge with only a USB cable. (SWD on the
+ * debug header J3 works too, with a WCH-LinkE.)
  *
  * Same as WCH's SystemReset_StartMode(Start_Mode_BOOT) followed by
  * NVIC_SystemReset(). Not tested on hardware. */

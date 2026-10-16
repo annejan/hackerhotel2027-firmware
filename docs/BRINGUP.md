@@ -8,8 +8,9 @@ problem shows up in the step that can explain it, before a later step
 trips over it.
 
 You need a bench supply with a current limit, a scope, a USB-UART adapter
-for J3 (3.3 V logic, **do not** connect its supply pin: pin 3 of J3 and
-J4 is the badge's VCC, up to ~5 V), a WCH-LinkE for J4, and
+and a WCH-LinkE for the debug header J3 (2 × 4 at 1.27 mm, so a 1.27 mm
+to 2.54 mm adapter or cable; 3.3 V logic, **do not** connect a supply
+pin: pin 5 of J3 is the badge's VCC, up to ~5 V), and
 [wchisp](https://github.com/ch32-rs/wchisp). Flash either firmware; the C
 one is smaller and logs the same.
 
@@ -31,7 +32,7 @@ about 300 mA, no USB.
 
 ## 2. SWD: what chip is this
 
-On J4 (1 SWIO, 2 SWCK, 3 VCC, 4 GND):
+On J3 (1 SWIO, 3 SWCK, 5 VCC, 7 GND):
 
 | Read | What | Expect |
 |---|---|---|
@@ -46,7 +47,7 @@ off.
 ## 3. Clock and UART
 
 Flash the firmware (hold ◀ + ▶ while plugging in USB, then `wchisp
-flash`, or over SWD). Open J3 at 115200 8N1. Expect at power-on:
+flash`, or over SWD). Open J3 (2 RX, 4 TX, 7 GND) at 115200 8N1. Expect at power-on:
 
 ```
 hh27 starfish badge, c firmware. Name: ...
@@ -87,8 +88,8 @@ Start at the lowest brightness (`level 0` on the console).
 
 ## 5. Inputs and power
 
-- Buttons: ◀ PC4, ▶ PC5, A PB18, B PB20. The bring-up test's KEY step
-  shows each press.
+- Buttons: ◀ PC4 (SW3), B PB20 (SW1), A PC5 (SW2), ▶ PB18 (SW4). The
+  bring-up test's KEY step shows each press.
 - CHRG (PB22) and VBUS (PC3): the PWR step logs `power: USB (PC3
   high), charging (CHRG low)`.
 - With USB in and the grid at full brightness, measure VBUS − VCC (the

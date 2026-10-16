@@ -2,9 +2,9 @@
 #include <stdint.h>
 
 /* The four push buttons, by index (what app_event() and `held` use):
- *   0 ◀  SW3  front, lower left leg (left thumb)    PC5
+ *   0 ◀  SW3  front, lower left leg (left thumb)    PC4
  *   1 B  SW1  back, left arm (left finger)          PB20
- *   2 A  SW2  back, right arm (right finger)        PC4
+ *   2 A  SW2  back, right arm (right finger)        PC5
  *   3 ▶  SW4  front, lower right leg (right thumb)  PB18
  * Active low, with 10k pull-ups to VCC on the board. */
 #define BUTTONS_POLL_MS 10

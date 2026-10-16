@@ -85,7 +85,7 @@ whose deadline passed during a flash write still ends), the Rust decoder
 with a distorted, edge-timed packet; neither is tested on a badge.
 C and Rust badges swap names with each other (checked in the emulator).
 
-**UART console.** The UART header J3 (115200 8N1) prints a log (boot,
+**UART console.** The debug header J3 (115200 8N1) prints a log (boot,
 names saved, IR packets) and takes commands: `help`, `info`,
 `name TEXT`, `show N`, `level N`, `hello`, `test`, `factory`,
 `sponsors`, `progress`.
@@ -114,10 +114,9 @@ board where they are; see
 | MCU | WCH **CH643Q**: QingKe V4C RISC-V (RV32IMAC), 48 MHz, 62 KiB flash, 20 KiB RAM, LQFP64 |
 | LEDs | 384 slots in a 24 × 16 matrix: PA0–PA23 drive the anodes (PWM), PB0–PB15 sink the cathodes (COM) |
 | | 208 mono LEDs in a 17 × 16 grid, 71 mono LEDs on the outline, 35 RGB LEDs (7 per arm) |
-| Buttons | ◀ SW3 PC5, B SW1 PB20, A SW2 PC4, ▶ SW4 PB18; active low, 10k pull-ups on the board |
+| Buttons | ◀ SW3 PC4, B SW1 PB20, A SW2 PC5, ▶ SW4 PB18; active low, 10k pull-ups on the board |
 | Power | LiPo (JST J2) with XT4054 charger and power path; CHRG on PB22; VBUS sense on PC3 |
-| Debug | SWD header J4: 1 SWIO (PC18), 2 SWCK (PC19), 3 VCC, 4 GND |
-| UART | header J3: 1 RX (PB17), 2 TX (PB16), 3 VCC, 4 GND; USART3. Log and console |
+| Debug | header J3, 2 × 4 at 1.27 mm: 1 SWIO (PC18), 2 RX (PB17), 3 SWCK (PC19), 4 TX (PB16), 5 VCC, 7 GND; 6 and 8 not connected. SWD, and USART3 for the log and console |
 | IR | receiver CGQ1 (38 kHz, on VCC) on PB19; IR LED D316, anode on VCC through R37 (200 Ω, about 15 mA), cathode PB21 (low = on). Name swap |
 
 ## Build
@@ -146,9 +145,9 @@ and every cathode to a PB pin. It fails if two LEDs share one slot.
 There are two ways in. With only a USB-C cable, through the CH643's
 factory boot ROM (3328 bytes of system flash) and
 [wchisp](https://github.com/ch32-rs/wchisp) (`cargo install wchisp`), as
-below. Or with a WCH-LinkE on the SWD header J4 (SWIO, SWCK, VCC, GND),
-which also gives a debugger. Pin 3 of J4 is the badge's VCC (battery or
-USB, up to about 5 V), not 3.3 V.
+below. Or with a WCH-LinkE on the debug header J3 (1 SWIO, 3 SWCK, 5 VCC,
+7 GND), which also gives a debugger. Pin 5 of J3 is the badge's VCC
+(battery or USB, up to about 5 V), not 3.3 V.
 wchisp lists the CH643 with USB and UART ISP support (`devices/0x24-CH643.yaml`).
 USB-C D+/D− go straight to PC17/PC16, the CH643's USB pins.
 

@@ -251,7 +251,7 @@ prototypes from that revision on should both send and receive.
 
 ## UART console
 
-The UART header J3 (pin 1 RX, pin 2 TX, pin 4 GND; 115200 baud, 8N1)
+The debug header J3 (pin 2 RX, pin 4 TX, pin 7 GND; 115200 baud, 8N1)
 prints a log: the name at power on, names saved, infrared packets sent
 and received. Type a command and Enter (pasting a whole line works too):
 
@@ -268,7 +268,7 @@ and received. Type a command and Enter (pasting a whole line works too):
 | `sponsors` | play the [sponsor reel](#sponsor-reel) again |
 | `progress` | the [challenges](#challenges): each one's level, and the total out of 25 |
 
-Pin 3 of J3 is the badge's VCC (battery or USB), not
+Pin 5 of J3 is the badge's VCC (battery or USB), not
 3.3 V: do not connect it to the adapter's supply.
 
 ## Factory test (the flashing table)

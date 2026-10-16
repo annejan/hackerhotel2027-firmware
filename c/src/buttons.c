@@ -11,7 +11,7 @@
 #define BOOT_TICKS (BUTTONS_BOOT_MS / BUTTONS_POLL_MS)
 
 static GPIO_TypeDef *const PORT[BUTTONS] = {GPIOC, GPIOB, GPIOC, GPIOB};
-static const uint8_t PIN[BUTTONS] = {5, 20, 4, 18};
+static const uint8_t PIN[BUTTONS] = {4, 20, 5, 18};
 
 static struct {
     bool down;

@@ -7,7 +7,7 @@
 //!       - 208 mono LEDs in a 17 x 16 grid in the centre
 //!       -  71 mono LEDs along the outline
 //!       -  35 RGB LEDs, 7 per arm (one PWM channel, three COMs each)
-//!   * four push buttons ◀ B A ▶ (PC5, PB20, PC4, PB18, active low; see buttons.rs)
+//!   * four push buttons ◀ B A ▶ (PC4, PB20, PC5, PB18, active low; see buttons.rs)
 //!   * LiPo charger XT4054, CHRG status on PB22; VBUS sense on PC3
 //!   * IR receiver (PB19) and IR LED (anode on VCC, PB21 cathode, low = on): ir.rs
 //!   * UART header (USART3: PB16 TX, PB17 RX): uart.rs; SWD header (PC18 SWIO, PC19 SWCK)

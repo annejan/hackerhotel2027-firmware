@@ -1,5 +1,5 @@
-/* USART3 on the UART header J3: pin 1 RX (PB17), pin 2 TX (PB16), pin 3
- * VCC, pin 4 GND. Output goes through a ring buffer that uart_poll()
+/* USART3 on the debug header J3: pin 2 RX (PB17), pin 4 TX (PB16), pin 5
+ * VCC, pin 7 GND. Output goes through a ring buffer that uart_poll()
  * drains, so logging never waits for the line. Input comes in on the RX
  * interrupt into a second ring buffer: a byte takes 87 us and the USART
  * holds only one, so polling from the main loop would drop pasted text.

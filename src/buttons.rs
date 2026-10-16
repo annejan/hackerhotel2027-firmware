@@ -2,9 +2,9 @@
 //! pulls its pin low while pressed.
 //!
 //!   index  name  switch  where                                 pin
-//!   0      ◀     SW3     front, lower left leg (left thumb)    PC5
+//!   0      ◀     SW3     front, lower left leg (left thumb)    PC4
 //!   1      B     SW1     back, left arm (left finger)          PB20
-//!   2      A     SW2     back, right arm (right finger)        PC4
+//!   2      A     SW2     back, right arm (right finger)        PC5
 //!   3      ▶     SW4     front, lower right leg (right thumb)  PB18
 //!
 //! The index is what the rest of the firmware sees (`Event::Press(i)`,
@@ -40,9 +40,9 @@ struct Button {
     ticks: u16,
 }
 
-/// Pin of each button, in index order: ◀ PC5, B PB20, A PC4, ▶ PB18.
+/// Pin of each button, in index order: ◀ PC4, B PB20, A PC5, ▶ PB18.
 /// (port, pin): false = GPIOC, true = GPIOB.
-const PINS: [(bool, u32); BUTTONS] = [(false, 5), (true, 20), (false, 4), (true, 18)];
+const PINS: [(bool, u32); BUTTONS] = [(false, 4), (true, 20), (false, 5), (true, 18)];
 
 pub struct Buttons {
     buttons: [Button; BUTTONS],

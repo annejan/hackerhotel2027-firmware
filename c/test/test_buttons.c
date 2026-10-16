@@ -11,7 +11,7 @@ static int n;
 void app_event(event_t ev, uint8_t arg) { n += sprintf(got + n, "%c%d ", "PTHCBS"[ev], arg); }
 
 static GPIO_TypeDef *const port[4] = {&fake_gpioc, &fake_gpiob, &fake_gpioc, &fake_gpiob};
-static const int pin[4] = {5, 20, 4, 18};
+static const int pin[4] = {4, 20, 5, 18};
 static void set(int i, int down)
 {
     if (down)
@@ -77,6 +77,6 @@ int main(void)
     expect("released", "");
 
     for (int i = 0; i < 4; i++) { set(i, 1); polls(3); set(i, 0); polls(3); }
-    expect("each button reads its own pin (PC5 PB20 PC4 PB18)", "P0 T0 P1 T1 P2 T2 P3 T3 ");
+    expect("each button reads its own pin (PC4 PB20 PC5 PB18)", "P0 T0 P1 T1 P2 T2 P3 T3 ");
     TEST_END("buttons");
 }

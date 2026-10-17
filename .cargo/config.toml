@@ -3,7 +3,7 @@ target = "riscv32imc-unknown-none-elf"
 
 [target.riscv32imc-unknown-none-elf]
 # Flash over USB-C with the boot ROM and wchisp (see README, "Flashing").
-# With a WCH-LinkE on the debug header J3 instead (1 SWIO PC18, 3 SWCK PC19,
-# 5 VCC, 7 GND; pin 5 is the badge's VCC, not 3.3 V):
+# With a WCH-LinkE on the debug header J3 instead (3 SWIO PC18, 4 SWCK PC19,
+# 5 VCC, 6 GND; pin 5 is the badge's VCC, not 3.3 V):
 #   runner = "wlink flash --enable-sdi-print --watch-serial"
 runner = "wchisp flash"

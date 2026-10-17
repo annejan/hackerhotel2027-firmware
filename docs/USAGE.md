@@ -211,10 +211,11 @@ as upper case. Names up to 3 characters stand still. Longer names scroll.
 
 ## Meeting other badges (infrared)
 
-On the name tag, **tap B** to send your name over infrared. Point the top
-of your badge, where the IR LED and receiver sit, at the other badge. A
-white wave runs out along your arms for a second as it sends (the
-packet itself takes up to half a second, longer for a longer name).
+On the name tag, **tap B** to send your name over infrared. Hold your
+badge face to face with the other one: the IR LED sits just above the
+centre, the receiver just below it. A white wave runs out along your
+arms for a second as it sends (the packet itself takes up to half a
+second, longer for a longer name).
 
 The badge that receives it shows **HI**, then your name, with colours
 running round its arms, and sends its own name back; your badge then
@@ -251,7 +252,7 @@ prototypes from that revision on should both send and receive.
 
 ## UART console
 
-The debug header J3 (pin 2 RX, pin 4 TX, pin 7 GND; 115200 baud, 8N1)
+The debug header J3 (pin 1 RX, pin 2 TX, pin 6 GND; 115200 baud, 8N1)
 prints a log: the name at power on, names saved, infrared packets sent
 and received. Type a command and Enter (pasting a whole line works too):
 
@@ -292,7 +293,7 @@ steps go by.
 | **ROW** | One row lit, moving top to bottom, then one column, moving left to right, then a few sets of dots on the outline and arms | Always exactly one row, column or set of dots, never two, none missing: tap **B**. Otherwise tap **A** |
 | **KEY** | `<` `B` `A` `>` dimmed | Press each button once; each lights up. Goes on by itself |
 | **USB** | `USB`, blinking until it sees USB power | Keep it plugged in. Goes on after a second of USB power |
-| **IR** | Heard (top) and sent (bottom) test packets | Nothing. It passes on its own echo, or on test packets from another badge nearby |
+| **IR** | Heard (top) and sent (bottom) test packets | Nothing. It passes on its own echo, or on test packets from another badge nearby. If it does not hear itself, hold a hand or a sheet of paper a few cm in front of the badge |
 | **OK** | Green arms, `OK` | Done. After 3 s the badge goes to its name tag |
 
 A failed step blinks red arms and shows the step's name: put the badge

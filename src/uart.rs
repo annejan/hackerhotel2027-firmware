@@ -1,5 +1,5 @@
-//! USART3 on the debug header J3: pin 2 RX (PB17), pin 4 TX (PB16), pin 5
-//! VCC, pin 7 GND; 115200 8N1. Same as `c/src/uart.c`: sends what log.rs
+//! USART3 on the debug header J3: pin 1 RX (PB17), pin 2 TX (PB16), pin 5
+//! VCC, pin 6 GND; 115200 8N1. Same as `c/src/uart.c`: sends what log.rs
 //! collected and hands typed lines to the console. Polled by the main loop;
 //! input comes in on the RX interrupt into a ring buffer, because a byte
 //! takes 87 us and the USART holds only one.

@@ -8,7 +8,7 @@ problem shows up in the step that can explain it, before a later step
 trips over it.
 
 You need a bench supply with a current limit, a scope, a USB-UART adapter
-and a WCH-LinkE for the debug header J3 (2 × 4 at 1.27 mm, so a 1.27 mm
+and a WCH-LinkE for the debug header J3 (1 × 6 at 1.27 mm, so a 1.27 mm
 to 2.54 mm adapter or cable; 3.3 V logic, **do not** connect a supply
 pin: pin 5 of J3 is the badge's VCC, up to ~5 V), and
 [wchisp](https://github.com/ch32-rs/wchisp). Flash either firmware; the C
@@ -32,7 +32,7 @@ about 300 mA, no USB.
 
 ## 2. SWD: what chip is this
 
-On J3 (1 SWIO, 3 SWCK, 5 VCC, 7 GND):
+On J3 (3 SWIO, 4 SWCK, 5 VCC, 6 GND):
 
 | Read | What | Expect |
 |---|---|---|
@@ -47,7 +47,7 @@ off.
 ## 3. Clock and UART
 
 Flash the firmware (hold ◀ + ▶ while plugging in USB, then `wchisp
-flash`, or over SWD). Open J3 (2 RX, 4 TX, 7 GND) at 115200 8N1. Expect at power-on:
+flash`, or over SWD). Open J3 (1 RX, 2 TX, 6 GND) at 115200 8N1. Expect at power-on:
 
 ```
 hh27 starfish badge, c firmware. Name: ...
@@ -125,7 +125,12 @@ when idle. PA12 must not change: it is an LED column, and also where the
 IR timer's complementary output would go if it were enabled.
 
 The IR step counts the packets the badge hears from itself (`ir: heard
-3 of 3 sent`). After that, two badges: B on the name tag sends your name,
+3 of 3 sent`). The IR LED (above the centre) and the receiver (below
+it) are 37 mm apart, both facing forward, so the echo is a reflection:
+if it hears nothing, hold a hand or a sheet of paper a few cm in front
+and note how far away it still works. The factory test fails its IR
+step after 10 s without an echo, so the flash table needs the same trick
+if bare boards do not hear themselves. After that, two badges: B on the name tag sends your name,
 the other badge greets you and answers. Then the factory test's IR step.
 
 ## 8. SysTick compare

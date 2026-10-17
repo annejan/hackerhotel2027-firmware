@@ -13,7 +13,9 @@
  *   KEY  press ◀, B, A and ▶ once each (automatic; 20 s)
  *   USB  USB power seen on PC3 for a second (automatic; 10 s)
  *   IR   sends test packets until one is heard: its own echo, or another
- *        badge's test packets (automatic; 10 s)
+ *        badge's test packets (automatic). After 10 s without one it
+ *        shows IR? with amber arms and keeps listening (a hand or a sheet
+ *        of paper in front gives a better echo): B = pass anyway, A = fail
  *
  * A failed step shows its name in red; B tries that step again. A + B
  * held for 3 s goes to the bring-up test instead. Every step is logged on

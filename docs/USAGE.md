@@ -293,17 +293,22 @@ steps go by.
 | **ROW** | One row lit, moving top to bottom, then one column, moving left to right, then a few sets of dots on the outline and arms | Always exactly one row, column or set of dots, never two, none missing: tap **B**. Otherwise tap **A** |
 | **KEY** | `<` `B` `A` `>` dimmed | Press each button once; each lights up. Goes on by itself |
 | **USB** | `USB`, blinking until it sees USB power | Keep it plugged in. Goes on after a second of USB power |
-| **IR** | Heard (top) and sent (bottom) test packets | Nothing. It passes on its own echo, or on test packets from another badge nearby. If it does not hear itself, hold a hand or a sheet of paper a few cm in front of the badge |
+| **IR** | Heard (top) and sent (bottom) test packets | Nothing. It passes on its own echo, or on test packets from another badge nearby |
+| **IR?** | After 10 s without an echo: `IR?`, amber arms. It keeps listening | Hold a hand or a sheet of paper a few cm in front of the badge: it passes as soon as it hears that. **B** passes it anyway, **A** fails it |
 | **OK** | Green arms, `OK` | Done. After 3 s the badge goes to its name tag |
 
 A failed step blinks red arms and shows the step's name: put the badge
 on the repair pile. Tap **B** to try that step once more. KEY fails after
-20 s and USB and IR after 10 s; the UART log says what was missing
+20 s and USB after 10 s; the UART log says what was missing
 (`factory test: FAIL at KEY: missing: < . A .`).
 
-The IR step needs the IR LED and the receiver on the board. With the
-receiver's supply fixed (hardware commit 0986add, see the hardware notes
-in the README), expect it to pass on prototypes.
+The IR step needs the IR LED and the receiver on the board. Since
+hardware commit 21c2f38 they are 37 mm apart (the LED above the centre,
+the receiver below it), both facing forward, so the badge hears itself
+only through a reflection. The prototypes will show whether a bare board
+does. If it does not, a hand in front is the test; B on `IR?` is for when
+the organisers decide to pass IR untested (the UART log says `ir: passed
+without hearing a test packet (B)`).
 
 Holding **A + B for 3 s** leaves the factory test for the full bring-up
 test below. The badge then runs the factory test again at the next
@@ -316,6 +321,7 @@ power-on.
 > 3. **ROW**: one line moving at a time, never two? Yes: **B**. No: **A**.
 > 4. **KEY**: press ◀, B, A and ▶ once each.
 > 5. **USB** and **IR** go by themselves. Keep it on USB.
+>    Amber **IR?**: hold your hand a few cm in front. Still **IR?**: **A**.
 > 6. Green **OK**: good badge. Red: repair pile.
 
 ## Sponsor reel

@@ -243,6 +243,23 @@ static void factory_frames(int n, bool echo)
     }
 }
 
+/* a fresh factory test, through LED, ROW, KEY and USB to the IR step */
+static void to_ir(void)
+{
+    stub_vbus = true;
+    app_factory();
+    for (int i = 0; i < 2; i++) {
+        factory_frames(FPS + 1, false);
+        tap(B);
+    }
+    factory_frames(FPS + 1, false);
+    for (int b = 0; b < 4; b++)
+        app_event(EV_PRESS, (uint8_t)b);
+    factory_frames(FPS + FPS + 2, false);
+    CHECK(logged("5/5 IR"), "on to the IR step");
+    log_clear();
+}
+
 static void factory(void)
 {
     stage_t st;
@@ -302,6 +319,35 @@ static void factory(void)
     app_event(EV_SELFTEST, 0);
     CHECK(!stub_ir_loop, "A + B leaves the factory test for the bring-up test");
     CHECK(!app_stage(&st), "without passing it");
+
+    /* no echo: after 10 s it asks, and keeps listening */
+    for (int k = 0; k < 3; k++) {
+        log_clear();
+        to_ir();
+        factory_frames(FPS + 5 * FPS, false);
+        tap(B);
+        CHECK(!logged("PASS"), "B does nothing while the IR step still waits");
+        factory_frames(5 * FPS, false);
+        CHECK(logged("ir: nothing heard yet") && !logged("FAIL") && stub_ir_loop,
+              "10 s without an echo: it asks, still listening [%s]", stub_log);
+        if (k == 0) {
+            tap(B);
+            factory_frames(1, false);
+            CHECK(logged("passed without hearing") && logged("factory test: PASS") && app_stage(&st) &&
+                      st == STAGE_TESTED,
+                  "B passes it anyway, and says so [%s]", stub_log);
+        } else if (k == 1) {
+            factory_frames(FPS + 1, true);
+            CHECK(logged("ir: test packet heard") && logged("factory test: PASS") && !logged("passed without"),
+                  "an echo after the question still passes on its own [%s]", stub_log);
+        } else {
+            tap(A);
+            CHECK(logged("FAIL at IR: nothing heard") && !stub_ir_loop, "A fails it [%s]", stub_log);
+            tap(B);
+            CHECK(logged("5/5 IR") && stub_ir_loop, "and B tries the IR step again");
+        }
+        factory_frames(3 * FPS + 2, false);
+    }
 }
 
 static void usb(void)

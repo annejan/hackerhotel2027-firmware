@@ -13,7 +13,9 @@
 //!   KEY  press ◀, B, A and ▶ once each (automatic; 20 s)
 //!   USB  USB power seen on PC3 for a second (automatic; 10 s)
 //!   IR   sends test packets until one is heard: its own echo, or another
-//!        badge's test packets (automatic; 10 s)
+//!        badge's test packets (automatic). After 10 s without one it
+//!        shows IR? with amber arms and keeps listening (a hand or a sheet
+//!        of paper in front gives a better echo): B = pass anyway, A = fail
 //!
 //! A failed step shows its name in red; B tries that step again. A + B
 //! held for 3 s goes to the bring-up test instead. Every step is logged on
@@ -144,6 +146,11 @@ impl Factory {
             }
             (LED | ROW, Event::Tap(1)) => self.next(),
             (LED | ROW, Event::Tap(2)) => self.fail("marked bad (A)"),
+            (IR, Event::Tap(1)) if self.t > LABEL + IR_TIMEOUT => {
+                log::line("ir: passed without hearing a test packet (B)");
+                self.next();
+            }
+            (IR, Event::Tap(2)) if self.t > LABEL + IR_TIMEOUT => self.fail("nothing heard"),
             _ => {}
         }
     }
@@ -251,13 +258,20 @@ impl Factory {
                     *ir_out = Some(irproto::Packet::new(irproto::TEST, b"TEST"));
                     self.ir_sent += 1;
                 }
-                draw_number(f, self.ir_heard, 2, 255);
+                if t < IR_TIMEOUT {
+                    draw_number(f, self.ir_heard, 2, 255);
+                } else {
+                    // nothing heard yet: keep listening, and ask
+                    if t == IR_TIMEOUT {
+                        log::line("ir: nothing heard yet; hold a hand or paper in front. B = pass anyway, A = fail");
+                    }
+                    center(f, "IR?", 2, if now / (FPS / 2) % 2 != 0 { 255 } else { 90 });
+                    arms(f, Rgb(255, 120, 0));
+                }
                 draw_number(f, self.ir_sent, 9, 80);
                 self.progress(f);
                 if self.ir_heard > 0 {
                     self.next();
-                } else if t >= IR_TIMEOUT {
-                    self.fail("nothing heard");
                 }
             }
         }

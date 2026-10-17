@@ -128,10 +128,12 @@ The IR step counts the packets the badge hears from itself (`ir: heard
 3 of 3 sent`). The IR LED (above the centre) and the receiver (below
 it) are 37 mm apart, both facing forward, so the echo is a reflection:
 if it hears nothing, hold a hand or a sheet of paper a few cm in front
-and note how far away it still works. The factory test fails its IR
-step after 10 s without an echo, so the flash table needs the same trick
-if bare boards do not hear themselves. After that, two badges: B on the name tag sends your name,
-the other badge greets you and answers. Then the factory test's IR step.
+and note how far away it still works. After that, two badges: B on the
+name tag sends your name, the other badge greets you and answers. Then
+the factory test's IR step: after 10 s without an echo it shows `IR?`
+with amber arms and keeps listening; B passes it anyway, A fails it.
+Whether bare boards hear themselves decides what the flashing table
+card says (see USAGE.md, factory test).
 
 ## 8. SysTick compare
 

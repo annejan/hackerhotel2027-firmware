@@ -352,6 +352,69 @@ mod tests {
         }
     }
 
+    /// The factory test from a fresh start to its IR step.
+    fn factory_to_ir() -> factory::Factory {
+        let mut fy = factory::Factory::new();
+        for step in 0..3 {
+            factory_frames(&mut fy, anim::FPS + 1);
+            if step < 2 {
+                fy.handle(Event::Tap(1)); // LED, ROW
+            } else {
+                for b in 0..4 {
+                    fy.handle(Event::Press(b)); // KEY
+                }
+            }
+        }
+        factory_frames(&mut fy, 2 * anim::FPS + 2);
+        assert!(fy.loopback(), "on to the IR step");
+        fy
+    }
+
+    /// n frames with USB power and no echo; the last frame's status and
+    /// whether the arms were amber
+    fn factory_frames(fy: &mut factory::Factory, n: u32) -> (factory::Status, bool) {
+        let mut f = frame::Frame::new();
+        let hw = selftest::Hw { rows: 0, vbus: true };
+        let mut st = factory::Status::Busy;
+        for _ in 0..n {
+            f.clear();
+            st = fy.render(&mut f, hw, false, &mut None);
+        }
+        let l = &RGB[0];
+        (st, f.px[l.r as usize] == 255 && f.px[l.g as usize] == 120 && f.px[l.b as usize] == 0)
+    }
+
+    #[test]
+    fn factory_ir_asks_without_an_echo() {
+        use factory::Status;
+        for answer in 0..3 {
+            let mut fy = factory_to_ir();
+            let (_, amber) = factory_frames(&mut fy, anim::FPS + 5 * anim::FPS);
+            assert!(!amber, "not asking yet");
+            fy.handle(Event::Tap(1));
+            assert!(fy.loopback(), "B does nothing while it still waits");
+            let (_, amber) = factory_frames(&mut fy, 5 * anim::FPS);
+            assert!(amber && fy.loopback(), "10 s without an echo: amber, still listening");
+            match answer {
+                0 => {
+                    fy.handle(Event::Tap(1));
+                    assert!(factory_frames(&mut fy, 1).0 == Status::Passed, "B passes it anyway");
+                }
+                1 => {
+                    fy.ir_heard();
+                    factory_frames(&mut fy, 1);
+                    assert!(factory_frames(&mut fy, 1).0 == Status::Passed, "a late echo passes it");
+                }
+                _ => {
+                    fy.handle(Event::Tap(2));
+                    assert!(!fy.loopback(), "A fails it");
+                    fy.handle(Event::Tap(1));
+                    assert!(fy.loopback(), "B tries the IR step again");
+                }
+            }
+        }
+    }
+
     #[test]
     fn edit_and_save() {
         let mut a = app::App::new(Name::new(b"AB"));

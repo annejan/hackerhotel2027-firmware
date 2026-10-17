@@ -108,6 +108,13 @@ void factory_event(event_t ev, uint8_t arg)
             next();
         else if (arg == 2)
             fail("marked bad (A)");
+    } else if (f.step == F_IR && ev == EV_TAP && f.t > LABEL + IR_TIMEOUT) {
+        if (arg == 1) {
+            log_line("ir: passed without hearing a test packet (B)");
+            next();
+        } else if (arg == 2) {
+            fail("nothing heard");
+        }
     }
 }
 
@@ -196,13 +203,19 @@ static void step_render(uint32_t now)
     case F_IR:
         if (t % IR_EVERY == 0 && ir_send(IR_TEST, (const uint8_t *)"TEST", 4))
             f.ir_sent++;
-        draw_number(f.ir_heard, 2, 255);
+        if (t < IR_TIMEOUT) {
+            draw_number(f.ir_heard, 2, 255);
+        } else {
+            /* nothing heard yet: keep listening, and ask */
+            if (t == IR_TIMEOUT)
+                log_line("ir: nothing heard yet; hold a hand or paper in front. B = pass anyway, A = fail");
+            draw_center("IR?", 2, now / (FPS / 2) % 2 ? 255 : 90);
+            arms((rgb_t){255, 120, 0});
+        }
         draw_number(f.ir_sent, 9, 80);
         progress(60);
         if (f.ir_heard)
             next();
-        else if (t >= IR_TIMEOUT)
-            fail("nothing heard");
         break;
     }
 }

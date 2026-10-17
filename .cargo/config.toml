@@ -1,7 +1,17 @@
 [build]
 target = "riscv32imc-unknown-none-elf"
 
+# Linker relaxation: calls become one `jal` (or `c.jal`) instead of
+# `auipc` + `jalr`, which the CH643's GCC build gets by default. `core`
+# is rebuilt with the same setting; the precompiled one lacks it, and LTO
+# then cannot strip the unused panic locations out of the calls into it.
+# Together 4.4 KB of flash. tools/fwsim/.cargo/config.toml switches
+# build-std off again for the PC.
+[unstable]
+build-std = ["core"]
+
 [target.riscv32imc-unknown-none-elf]
+rustflags = ["-C", "target-feature=+relax"]
 # Flash over USB-C with the boot ROM and wchisp (see README, "Flashing").
 # With a WCH-LinkE on the debug header J3 instead (3 SWIO PC18, 4 SWCK PC19,
 # 5 VCC, 6 GND; pin 5 is the badge's VCC, not 3.3 V):

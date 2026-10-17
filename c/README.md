@@ -41,15 +41,16 @@ the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel, the challenges and 4 in a row | 47.3 KB (48468 B) | 4.7 KB (+ 2 KB stack) |
-| Rust, `opt-level = "z"` (the default) | 57.0 KB (58354 B) | 2.2 KB (+ stack) |
-| Rust, `opt-level = "s"` | does not fit any more | |
+| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel, the challenges and 4 in a row | 47.6 KB (48720 B) | 4.7 KB (+ 2 KB stack) |
+| Rust, `opt-level = "z"` (the default) | 52.9 KB (54140 B) | 2.2 KB (+ stack) |
+| Rust, `opt-level = "s"` | 59.8 KB (61214 B) | |
 
 The Rust firmware is a super-loop on the registers too now, so there is
 no runtime in the difference (Embassy and ch32-hal took about 5.6 KB
-before; see ../README.md, Size). The 9.7 KB that is left is code
-generation: panic paths, bounds checks and inlining make the same code
-about 1.2 times larger in Rust.
+before; see ../README.md, Size). The 5.3 KB that is left is code
+generation: bounds checks, iterators and games copied into place make the
+same code about 1.1 times larger in Rust (1.2 before the Rust build got
+linker relaxation).
 
 C keeps its larger buffers static (Snake's demo path search, 688 bytes;
 the shared game-state union, 500 bytes), where Rust has them on the stack

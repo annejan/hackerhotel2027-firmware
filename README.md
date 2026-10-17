@@ -122,7 +122,7 @@ board where they are; see
 ## Build
 
 ```sh
-cargo build --release            # Rust 1.98.0 (rust-toolchain.toml), target riscv32imc-unknown-none-elf
+cargo build --release            # pinned nightly (rust-toolchain.toml), target riscv32imc-unknown-none-elf
 cargo run --release              # flashes over USB with wchisp, see Flashing
 ```
 
@@ -242,16 +242,16 @@ challenges' progress and the first-boot stage.
 
 | | Flash (of 61.5 KB) | Static RAM (of 20 KB) |
 |---|---|---|
-| C, GCC 15 `-Os` | **47.3 KB** (77%) | 4.7 KB + 2 KB stack |
-| Rust, `opt-level = "z"` (default) | **57.0 KB** (93%) | 2.2 KB + stack |
-| Rust, `opt-level = "s"` | does not fit any more | |
+| C, GCC 15 `-Os` | **47.6 KB** (77%) | 4.7 KB + 2 KB stack |
+| Rust, `opt-level = "z"` (default) | **52.9 KB** (86%) | 2.2 KB + stack |
+| Rust, `opt-level = "s"` | 59.8 KB (97%) | |
 
 From `size`: flash is text + data, static RAM data + bss (C's bss
 includes its 2 KB stack, counted separately here). The Rust stack is not
 static: main's stack also holds the App, about 1.3 KB.
 
-Rust has 4.5 KB left, C 14.2 KB; below the 61440-byte point where
-`wchisp flash` would wipe the settings (see Flashing), 3.0 and 12.7 KB.
+Rust has 8.6 KB left, C 13.9 KB; below the 61440-byte point where
+`wchisp flash` would wipe the settings (see Flashing), 7.1 and 12.4 KB.
 4 in a row costs 2.9 KB in C and about 4.5 KB in Rust (with the packet
 type the infrared queue now uses).
 The challenges (four games, the progress and the victory dance) cost
@@ -275,9 +275,15 @@ Infrared and the UART console add 4.8 KB (IR driver 1.1 KB, pulse codec
 and 0.9 KB of RAM, mostly the UART's 512-byte send and 128-byte receive
 buffers.
 
-Rust is 9.7 KB (9886 bytes, 1.20 times) larger than C for the same
+Rust is 5.3 KB (5420 bytes, 1.11 times) larger than C for the same
 features, with no runtime left to account for it: the gap is code
-generation in the app code (panic paths, bounds checks, inlining).
+generation in the app code (bounds checks, iterators, games built on the
+stack and copied into place). It was 9.7 KB until the Rust build got
+linker relaxation (`.cargo/config.toml`): before that every call was
+`auipc` + `jalr`, 8 bytes, where GCC's are one `jal` or `c.jal`, and the
+precompiled `core` kept the panic locations alive. Relaxation and
+rebuilding `core` with it (`build-std`, hence the pinned nightly) took
+4.4 KB off.
 Until the bare-metal rewrite the Rust firmware ran on Embassy with
 ch32-hal, and was 58.5 KB. Embassy served only as a timer service (six
 tasks, each a poll and a sleep, and one channel; no peripheral was

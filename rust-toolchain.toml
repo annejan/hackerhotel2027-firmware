@@ -1,6 +1,9 @@
 # Pinned: code size changes between compiler releases, and the Rust build
-# has to fit 62 KB of flash (CI checks it against a limit).
+# has to fit 62 KB of flash (CI checks it against a limit). A nightly,
+# because .cargo/config.toml rebuilds `core` (build-std) with linker
+# relaxation: 4.4 KB smaller than 1.98.0 stable, which cannot do that.
 [toolchain]
-channel = "1.98.0"
+channel = "nightly-2026-10-01"
+components = ["rust-src"]
 targets = ["riscv32imc-unknown-none-elf"]
 profile = "minimal"

@@ -16,6 +16,6 @@ critical-section = "1"
 [profile.release]
 strip = false     # symbols are not flashed, keep them for debugging
 lto = true
-opt-level = "z"     # "s" is ~5 KB larger; the 62 KB flash is getting full
+opt-level = "z"     # "s" is ~7 KB larger
 debug = true
 codegen-units = 1

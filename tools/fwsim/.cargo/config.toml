@@ -1,3 +1,10 @@
 [build]
 # the firmware's .cargo/config.toml targets the badge; this runs on the PC
 target = "host-tuple"
+
+# The firmware's config rebuilds `core` for the badge (build-std), and
+# cargo joins the lists of both files rather than letting this one turn it
+# off: so build all of `std` from source for the PC too, else `core` comes
+# twice. Costs about 10 s on a clean build.
+[unstable]
+build-std = ["std"]

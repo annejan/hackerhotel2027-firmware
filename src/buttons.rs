@@ -1,11 +1,13 @@
 //! The four push buttons. Each has a 10k pull-up to VCC on the board and
 //! pulls its pin low while pressed.
 //!
-//!   index  name  switch  where                                 pin
-//!   0      ◀     SW3     front, lower left leg (left thumb)    PC4
-//!   1      B     SW1     back, left arm (left finger)          PB20
-//!   2      A     SW2     back, right arm (right finger)        PC5
-//!   3      ▶     SW4     front, lower right leg (right thumb)  PB18
+//! All four are on the back; left and right as seen from the front.
+//!
+//!   index  name  switch  where             pin
+//!   0      ◀     SW3     lower left leg    PC4
+//!   1      B     SW1     left arm          PB20
+//!   2      A     SW2     right arm         PC5
+//!   3      ▶     SW4     lower right leg   PB18
 //!
 //! The index is what the rest of the firmware sees (`Event::Press(i)`,
 //! bit i of `held()`): ◀ / ▶ step and steer, A selects (hold: menu), B goes

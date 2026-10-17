@@ -22,8 +22,8 @@ animations; interface in badge_emu.h). This program stands in for the rest:
 the buttons (with the same press / tap / hold / chord rules as buttons.rs),
 the charger, and the LEDs, drawn on a KiCad render of the board.
 
-Keys: Left / Right = ◀ / ▶ (the front buttons), Up or A = A, Down or B = B
-(the buttons on the back), or click the buttons on the board.
+Keys: Left / Right = ◀ / ▶ (the lower legs), Up or A = A, Down or B = B
+(the side arms), or click the buttons on the board.
 C = USB power on/off, R = reset, Esc = quit.
 """
 import ctypes
@@ -348,8 +348,8 @@ class App:
         self.canvas = tk.Canvas(root, width=S, height=S + 72, bg="#111318", highlightthickness=0)
         self.canvas.pack()
         self.image_id = self.canvas.create_image(0, 0, anchor="nw")
-        # the buttons where they are on the board; the two on the back
-        # (A, B) are drawn dashed, at the tips of the side arms
+        # the buttons where they are on the board; those on the back (all
+        # four, these days) are drawn dashed
         self.rings = []
         L, where = self.renderer.L, {b["ref"]: b for b in self.renderer.buttons}
         for i, ref in enumerate(BUTTON_REFS):

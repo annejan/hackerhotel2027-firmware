@@ -8,16 +8,17 @@ To try it on a PC, use the [emulator](#emulator).
 
 ## The buttons
 
-The badge has four push buttons. Hold the badge by its two lower legs: your
-thumbs are on the front buttons, your index fingers reach the two on the
-back.
+The badge has four push buttons, all on the back. Hold the badge by its
+two lower legs, LEDs towards you: your fingers are on ◀ and ▶ behind the
+legs and reach up to B and A behind the side arms. Left and right are as
+seen from the front.
 
 | Button | Where | Mostly used for |
 |---|---|---|
-| **◀** | front, lower left leg (SW3) | previous, left |
-| **▶** | front, lower right leg (SW4) | next, right |
-| **A** | back, right arm (SW2) | select; hold for the menu |
-| **B** | back, left arm (SW1) | drop in Startris, previous position in EDIT NAME |
+| **◀** | lower left leg (SW3) | previous, left |
+| **▶** | lower right leg (SW4) | next, right |
+| **A** | right arm (SW2) | select; hold for the menu |
+| **B** | left arm (SW1) | drop in Startris, previous position in EDIT NAME |
 
 | Press | What it is |
 |---|---|

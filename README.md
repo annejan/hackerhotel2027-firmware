@@ -37,8 +37,8 @@ every game, the name tag and the emulator. The short version:
 | **First power-on** | a freshly flashed badge runs a 30 s pass / fail factory test for the flashing table, and the power-on after it passed plays the sponsor reel once ([details](docs/USAGE.md#factory-test-the-flashing-table)) |
 | **Hold A + B, 3 s** | bring-up test for a new board: COM / PWM / LED walks with designators on the UART, scan rate, IR loopback, power ([details](docs/USAGE.md#bring-up-test-first-boards)) |
 
-◀ and ▶ are the two buttons on the front of the lower legs (thumbs), A and
-B the two on the back of the side arms (A right, B left).
+All four buttons are on the back: ◀ and ▶ on the lower legs, A and B on
+the side arms (A right, B left), left and right as seen from the front.
 
 Type your name on the badge with **EDIT NAME** in the menu (◀/▶ letter,
 A next, hold A save). It is kept in flash. Until then the badge shows the

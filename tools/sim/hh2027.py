@@ -67,7 +67,7 @@ def refresh():
         if ref.startswith("D") and ("0402" in lib or "B1515" in lib):
             p = fp.GetPosition()
             leds.append(dict(ref=ref, rgb="B1515" in lib, x=mm(p.x), y=mm(p.y)))
-    # the push buttons, for the emulator (SW1, SW2 are on the back)
+    # the push buttons, for the emulator (all four on the back since 0986add)
     buttons = []
     for ref in ("SW1", "SW2", "SW3", "SW4"):
         fp = b.FindFootprintByReference(ref)

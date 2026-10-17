@@ -1,11 +1,12 @@
 #pragma once
 #include <stdint.h>
 
-/* The four push buttons, by index (what app_event() and `held` use):
- *   0 ◀  SW3  front, lower left leg (left thumb)    PC4
- *   1 B  SW1  back, left arm (left finger)          PB20
- *   2 A  SW2  back, right arm (right finger)        PC5
- *   3 ▶  SW4  front, lower right leg (right thumb)  PB18
+/* The four push buttons, by index (what app_event() and `held` use). All
+ * four are on the back; left and right as seen from the front:
+ *   0 ◀  SW3  lower left leg    PC4
+ *   1 B  SW1  left arm          PB20
+ *   2 A  SW2  right arm         PC5
+ *   3 ▶  SW4  lower right leg   PB18
  * Active low, with 10k pull-ups to VCC on the board. */
 #define BUTTONS_POLL_MS 10
 #define BUTTONS_HOLD_MS 600

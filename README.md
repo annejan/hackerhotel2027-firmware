@@ -223,6 +223,7 @@ peripheral library), for comparison; see `c/README.md` and the sizes below.
 | `.github/workflows/ci.yml` | CI: builds both firmwares and fails when either is over 61440 bytes of flash (see Flashing), runs the C tests, the fwsim tests and soak, the parity check and the infrared game |
 | `tools/sim/logo.py` | Sponsor logos: `assets/sponsors/*.svg` to greyscale bitmaps for the grid (`c/src/logos.h`, `src/logos.rs`); needs Inkscape and scipy |
 | `tools/sim/fwgif.py` | Turns a `fwsim record` (or frames from the C emulator library) into a GIF on the board render |
+| `tools/sim/docs_gifs.sh` | Records the firmware and rewrites every `docs/fw/*.gif` (about 4 minutes); run it after `hh2027.py --refresh` or a change to what a GIF shows |
 | `tools/sim/hh2027.py` | Animation sketches on a KiCad 3D render of the board (GIF + MP4 into `previews/`); `--refresh` re-reads the board (kicad-cli + pcbnew) |
 | `tools/sim/games.py` | The first game mock-ups, played by a scripted AI |
 | `tools/gen_layout.py` | LED map from the KiCad board, for Rust and C |

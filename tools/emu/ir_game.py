@@ -20,7 +20,7 @@ import shutil
 import sys
 import tempfile
 
-FRAME = 16 * 17 + 71 + 35 * 3
+FRAME = 16 * 17 + 128 + 35 * 3  # EMU_FRAME_MAX
 PRESS, TAP = 0, 1
 LEFT, B, RIGHT = 0, 1, 3
 

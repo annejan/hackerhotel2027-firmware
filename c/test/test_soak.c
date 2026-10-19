@@ -15,7 +15,7 @@ static uint32_t rnd(void) { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed
 int main(int argc, char **argv)
 {
     long frames = argc > 1 ? atol(argv[1]) : 200000;
-    uint8_t out[EMU_FRAME_BYTES], pkt[64];
+    uint8_t out[EMU_FRAME_MAX], pkt[64];
     uint8_t held = 0;
     int reboots = 0;
     emu_fresh();

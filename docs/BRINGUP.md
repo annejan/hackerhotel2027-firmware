@@ -21,7 +21,7 @@ WCH-LinkE. Any SWD tool that can read and write words does.
 ## 1. Before power-on: the LED current
 
 The column resistors R1..R24 set the LED current (the firmware leaves the
-CH643's built-in constant current off). With all 384 slots populated, one
+CH643's built-in constant current off). With the slots populated, one
 COM line can carry 24 columns at once, so the peak current is 24 × the
 column current, at every brightness. The datasheet allows **550 mA in
 total** through the VDD pins (table 3-1). At 20 mA per column a white row
@@ -96,6 +96,12 @@ Start at the lowest brightness (`level 0` on the console).
   drop over D315). PC3 sees VBUS directly while the chip runs on VCC,
   and the datasheet allows only VDD + 0.3 V on a pin; this measurement
   sizes the series resistor proposed for PC3.
+- Scope VCC at C5 or C6 on battery, with every LED on at full
+  brightness (the bring-up test's ALL step after `level 4`): each LED
+  row pulls up to 24 columns from VCC, 2930 times a second, and since
+  hardware 1ce1163 VCC has only those two 100 nF next to the chip (C4
+  is out). Note the ripple, and whether the chip resets or the USB
+  drops out.
 
 ## 6. Flash store
 

@@ -5,7 +5,7 @@ Uses the real board: LED positions come from the KiCad PCB (via pcbnew) and the
 background is a KiCad 3D render of the top side, dimmed to look like a dark room.
 
   208 mono 0402 LEDs   17x16 octagonal grid in the centre, 2 mm pitch
-   71 mono 0402 LEDs   following the board outline
+   63 mono 0402 LEDs   following the board outline (71 before 1ce1163)
    35 RGB 1515 LEDs    7 per arm
 
 Usage:
@@ -119,8 +119,11 @@ class Layout:
         self.gmask = np.zeros((self.GH, self.GW), bool)
         for r, c in self.grid_rc.values():
             self.gmask[r, c] = True
+        # clockwise from the top, as tools/gen_layout.py orders the firmware's
+        # EDGE: by angle in 1/256 turn, ties in board order
         rel = mx[self.edge] - self.center
-        self.edge = [self.edge[j] for j in np.argsort(np.arctan2(rel[:, 0], -rel[:, 1]))]
+        turn = np.round(np.arctan2(rel[:, 0], -rel[:, 1]) % (2 * np.pi) / (2 * np.pi) * 256) % 256
+        self.edge = [self.edge[j] for j in np.argsort(turn, kind="stable")]
         self.mono_mm = mx
 
         # rgb: group by arm (angle sector), order centre -> tip
@@ -464,7 +467,7 @@ def charging(L, T=120):
             img *= .6 + .4 * math.sin((t - T * .8) / 2)
         m = L.grid_to_mono(img)
         for j, i in enumerate(L.edge):
-            m[i] = .25 * (.5 + .5 * math.sin(t / 6 + j / 71 * 2 * math.pi))
+            m[i] = .25 * (.5 + .5 * math.sin(t / 6 + j / len(L.edge) * 2 * math.pi))
         on = L.rank < lvl * 7
         rgb = np.where(on[:, None], hsv_arr(.33 * lvl * np.ones(L.nr)), 0) * .8
         fr.append((m, rgb))

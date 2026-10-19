@@ -17,7 +17,7 @@ import ctypes
 import subprocess
 import sys
 
-FRAME = 16 * 17 + 71 + 35 * 3
+FRAME = 16 * 17 + 128 + 35 * 3  # EMU_FRAME_MAX
 ITEMS = ["HACKER HOTEL", "RIPPLE", "GALAXY", "HEART", "TWINKLE", "BREAKOUT", "VICTORY"]
 FRAMES = 600
 

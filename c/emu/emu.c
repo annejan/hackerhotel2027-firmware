@@ -41,6 +41,7 @@ void reboot_to_boot_rom(void)
 EXPORT uint32_t emu_abi(void) { return EMU_ABI; }
 EXPORT const char *emu_firmware(void) { return "c"; }
 EXPORT uint32_t emu_fps(void) { return FPS; }
+EXPORT uint32_t emu_edge_leds(void) { return EDGE_LEDS; }
 EXPORT void emu_init(void)
 {
     name_t name;

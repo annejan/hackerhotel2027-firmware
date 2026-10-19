@@ -5,7 +5,7 @@
 //!   * 384 LED slots in a 24 x 16 matrix: PA0..PA23 drive anodes (PWM),
 //!     PB0..PB15 sink cathodes (COM), scanned by the LEDPWM peripheral
 //!       - 208 mono LEDs in a 17 x 16 grid in the centre
-//!       -  71 mono LEDs along the outline
+//!       -  63 mono LEDs along the outline (71 before hardware 1ce1163)
 //!       -  35 RGB LEDs, 7 per arm (one PWM channel, three COMs each)
 //!   * four push buttons ◀ B A ▶ (PC4, PB20, PC5, PB18, active low; see buttons.rs)
 //!   * LiPo charger XT4054, CHRG status on PB22; VBUS sense on PC3

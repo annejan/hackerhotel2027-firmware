@@ -41,8 +41,8 @@ the slot-to-designator table; the factory test 2.4 KB, the sponsor reel
 
 | | Flash | Static RAM |
 |---|---|---|
-| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel, the challenges and 4 in a row | 47.6 KB (48720 B) | 4.7 KB (+ 2 KB stack) |
-| Rust, `opt-level = "z"` (the default) | 52.9 KB (54140 B) | 2.2 KB (+ stack) |
+| C, with USB, IR, the UART console, the bring-up and factory tests, the sponsor reel, the challenges and 4 in a row | 47.6 KB (48704 B) | 4.7 KB (+ 2 KB stack) |
+| Rust, `opt-level = "z"` (the default) | 52.9 KB (54144 B) | 2.2 KB (+ stack) |
 | Rust, `opt-level = "s"` | 59.8 KB (61214 B) | |
 
 The Rust firmware is a super-loop on the registers too now, so there is

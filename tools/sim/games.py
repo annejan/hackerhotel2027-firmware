@@ -7,7 +7,7 @@ while the AI presses them.
 
   python3 tools/sim/games.py [--out=DIR] [--width=PX] [--no-mp4] [game ...]
 
-The playfield is the 17 x 16 octagonal grid; the 71 outline LEDs and the
+The playfield is the 17 x 16 octagonal grid; the outline LEDs and the
 35 RGB LEDs (7 per arm) carry score, lives and effects.
 """
 import random

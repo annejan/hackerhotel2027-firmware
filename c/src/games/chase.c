@@ -1,5 +1,5 @@
 /* Star Chase, same as ../../../src/games/chase.rs: a light runs round the
- * 71 outline LEDs. Stop it (◀, B or ▶) beside the arm that is lit
+ * outline LEDs. Stop it (◀, B or ▶) beside the arm that is lit
  * green. Every hit speeds it up; three misses and it is over. The grid
  * shows the level. */
 #include <string.h>

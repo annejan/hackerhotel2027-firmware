@@ -112,8 +112,8 @@ board where they are; see
 | | |
 |---|---|
 | MCU | WCH **CH643Q**: QingKe V4C RISC-V (RV32IMAC), 48 MHz, 62 KiB flash, 20 KiB RAM, LQFP64 |
-| LEDs | 384 slots in a 24 × 16 matrix: PA0–PA23 drive the anodes (PWM), PB0–PB15 sink the cathodes (COM) |
-| | 208 mono LEDs in a 17 × 16 grid, 71 mono LEDs on the outline, 35 RGB LEDs (7 per arm) |
+| LEDs | 384 slots in a 24 × 16 matrix (376 in use): PA0–PA23 drive the anodes (PWM), PB0–PB15 sink the cathodes (COM) |
+| | 208 mono LEDs in a 17 × 16 grid, 63 mono LEDs on the outline (71 until hardware 1ce1163 took eight out, for now), 35 RGB LEDs (7 per arm) |
 | Buttons | ◀ SW3 PC4, B SW1 PB20, A SW2 PC5, ▶ SW4 PB18; active low, 10k pull-ups on the board |
 | Power | LiPo (JST J2) with XT4054 charger and power path; CHRG on PB22; VBUS sense on PC3 |
 | Debug | header J3, 1 × 6 at 1.27 mm: 1 RX (PB17), 2 TX (PB16), 3 SWIO (PC18), 4 SWCK (PC19), 5 VCC, 6 GND. USART3 for the log and console, and SWD |
@@ -275,7 +275,7 @@ Infrared and the UART console add 4.8 KB (IR driver 1.1 KB, pulse codec
 and 0.9 KB of RAM, mostly the UART's 512-byte send and 128-byte receive
 buffers.
 
-Rust is 5.3 KB (5420 bytes, 1.11 times) larger than C for the same
+Rust is 5.3 KB (5440 bytes, 1.11 times) larger than C for the same
 features, with no runtime left to account for it: the gap is code
 generation in the app code (bounds checks, iterators, games built on the
 stack and copied into place). It was 9.7 KB until the Rust build got

@@ -7,7 +7,7 @@
 #pragma once
 #include <stdint.h>
 
-#define EMU_ABI 1
+#define EMU_ABI 2
 
 /* events, as the button and charger code send them on the badge */
 enum {
@@ -20,16 +20,19 @@ enum {
 };
 
 /* one frame: grid (16 rows x 17 columns, 0 where the octagon has no LED),
- * outline (71, clockwise from the top), RGB (35 x r,g,b, arm 0..4 then rank
- * 0..6 from the centre); linear brightness 0..255 before gamma */
-#define EMU_FRAME_BYTES (16 * 17 + 71 + 35 * 3)
+ * outline (emu_edge_leds(), clockwise from the top), RGB (35 x r,g,b, arm
+ * 0..4 then rank 0..6 from the centre); linear brightness 0..255 before
+ * gamma. The outline count follows the board (tools/gen_layout.py), so a
+ * frame is 16 * 17 + emu_edge_leds() + 35 * 3 bytes, at most this: */
+#define EMU_FRAME_MAX (16 * 17 + 128 + 35 * 3)
 
 uint32_t emu_abi(void);            /* EMU_ABI */
 const char *emu_firmware(void);    /* "c" or "rust" */
 uint32_t emu_fps(void);
+uint32_t emu_edge_leds(void);      /* outline LEDs in a frame */
 void emu_init(void);               /* power on; also after a reboot */
 void emu_event(uint8_t kind, uint8_t arg);
-/* render the next frame into out[EMU_FRAME_BYTES]; held = buttons down
+/* render the next frame into out (see above for its size); held = buttons down
  * now, bit n = button n. Returns 1 when the firmware rebooted into the USB
  * boot ROM (call emu_init to power on again). */
 uint32_t emu_render(uint8_t held, uint8_t *out);

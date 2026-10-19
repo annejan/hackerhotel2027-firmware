@@ -47,8 +47,7 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "tools" / "sim"))
 import hh2027 as h  # noqa: E402
 
-GH, GW, NE, NR = 16, 17, 71, 35
-FRAME_BYTES = GH * GW + NE + NR * 3
+GH, GW, NR = 16, 17, 35  # the outline's count comes from the firmware
 HOLD_MS, BOOT_MS = 600, 3000          # as buttons.rs
 PRESS, TAP, HOLD, CHARGING, BOOTLOADER, SELFTEST = range(6)
 
@@ -84,11 +83,13 @@ class Firmware:
         lib.emu_render.argtypes = [ctypes.c_uint8, ctypes.POINTER(ctypes.c_uint8)]
         lib.emu_render.restype = ctypes.c_uint32
         lib.emu_brightness.restype = ctypes.c_uint8
-        if lib.emu_abi() != 1:
-            sys.exit(f"{path}: emulator interface {lib.emu_abi()}, expected 1")
+        if lib.emu_abi() != 2:
+            sys.exit(f"{path}: emulator interface {lib.emu_abi()}, expected 2 (build it again?)")
+        lib.emu_edge_leds.restype = ctypes.c_uint32
         self.name = lib.emu_firmware().decode()
         self.fps = lib.emu_fps()
-        self.buf = (ctypes.c_uint8 * FRAME_BYTES)()
+        self.edge_leds = lib.emu_edge_leds()
+        self.buf = (ctypes.c_uint8 * (GH * GW + self.edge_leds + NR * 3))()
         self.has_usb = hasattr(lib, "emu_usb")
         if self.has_usb:
             lib.emu_usb.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.POINTER(ctypes.c_uint8)]
@@ -318,7 +319,7 @@ class FastRenderer:
         for j, i in enumerate(L.edge):
             mono[i] = frame[GH * GW + j] / 255
         rgb = np.zeros((NR, 3))
-        rgb[self.rgb_index] = frame[GH * GW + NE:].reshape(NR, 3) / 255
+        rgb[self.rgb_index] = frame[-NR * 3:].reshape(NR, 3) / 255
         img = self.base.copy()
         for v, (y0, y1, x0, x1, col, hot) in zip(mono * gain, self.mono):
             if v > .004:
@@ -337,6 +338,9 @@ class App:
         self.console = console
         self.buttons = Buttons(fw.event)
         self.renderer = FastRenderer()
+        if len(self.renderer.L.edge) != fw.edge_leds:
+            sys.exit(f"the {fw.name} firmware has {fw.edge_leds} outline LEDs, the board render "
+                     f"{len(self.renderer.L.edge)}: run tools/sim/hh2027.py --refresh, or build it again")
         self.charging = False
         self.message, self.message_until = "", 0
         self.release_pending = {}

@@ -145,7 +145,12 @@ pub extern "C" fn emu_seed(v: u32) {
 
 #[no_mangle]
 pub extern "C" fn emu_abi() -> u32 {
-    1
+    2
+}
+
+#[no_mangle]
+pub extern "C" fn emu_edge_leds() -> u32 {
+    EDGE.len() as u32
 }
 
 #[no_mangle]

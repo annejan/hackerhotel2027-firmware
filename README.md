@@ -112,12 +112,12 @@ board where they are; see
 | | |
 |---|---|
 | MCU | WCH **CH643Q**: QingKe V4C RISC-V (RV32IMAC), 48 MHz, 62 KiB flash, 20 KiB RAM, LQFP64 |
-| LEDs | 384 slots in a 24 × 16 matrix (376 in use): PA0–PA23 drive the anodes (PWM), PB0–PB15 sink the cathodes (COM) |
-| | 208 mono LEDs in a 17 × 16 grid, 63 mono LEDs on the outline (71 until hardware 1ce1163 took eight out, for now), 35 RGB LEDs (7 per arm) |
+| LEDs | 384 slots in a 24 × 16 matrix (all in use): PA0–PA23 drive the anodes (PWM), PB0–PB15 sink the cathodes (COM) |
+| | 208 mono LEDs in a 17 × 16 grid, 71 mono LEDs on the outline, 35 RGB LEDs (7 per arm) |
 | Buttons | ◀ SW3 PC4, B SW1 PB20, A SW2 PC5, ▶ SW4 PB18; active low, 10k pull-ups on the board |
 | Power | LiPo (JST J2) with XT4054 charger and power path; CHRG on PB22; VBUS sense on PC3 |
 | Debug | header J3, 1 × 6 at 1.27 mm: 1 RX (PB17), 2 TX (PB16), 3 SWIO (PC18), 4 SWCK (PC19), 5 VCC, 6 GND. USART3 for the log and console, and SWD |
-| IR | both on the front: receiver CGQ1 (38 kHz, on VCC) below the centre, on PB19; IR LED D316 above the centre, anode on VCC through R37 (200 Ω, about 15 mA), cathode PB21 (low = on). Name swap |
+| IR | both on the front: receiver CGQ1 (38 kHz, on VCC) below the centre, on PB19; IR LED D315 straight above the centre, anode on VCC through R32 (200 Ω, about 15 mA), cathode PB21 (low = on). Name swap |
 
 ## Build
 
@@ -338,14 +338,14 @@ What to check, in order, on the first prototype: **[docs/BRINGUP.md](docs/BRINGU
   went); `ir.rs` / `ir.c` pull up PB23 (no longer the IR LED). PC3 (VBUS
   sense) must stay a floating input.
 - **IR receiver supply: fixed** in hardware commit 0986add. Its VCC
-  (through R36) and the IR_RECV pull-up R35 were on a `+3.3V` net that
+  (through R28) and the IR_RECV pull-up R27 were on a `+3.3V` net that
   nothing drove; they are on VCC now.
 - **VBUS straight into PC3.** VCC is VBUS minus a Schottky drop, so PC3
   sits a little above VDD while USB is in; the datasheet allows at most
   VDD + 0.3 V on an I/O pin (CH643DS0 3.2). A divider would be safer.
 - **IR LED current: fixed** in hardware commit 0986add. The anode hung
   off PB23 through 47 Ω, more than a PB pin may source (30 mA absolute
-  maximum). Now the anode is on VCC through R37 (200 Ω, about 15 mA) and
+  maximum). Now the anode is on VCC through R32 (200 Ω, about 15 mA) and
   PB21 sinks the cathode, with the carrier from TIM2 CH1.
 - **Wiring order is not the order you see.** Grid column 7 (D143) goes
   through R10 to PA9, columns 8 and 9 (D141, D142) through R8 and R9 to

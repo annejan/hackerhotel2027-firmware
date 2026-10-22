@@ -8,7 +8,7 @@
 #define SLOTS (PWM_CHANNELS * COMS)
 #define GRID_W 17
 #define GRID_H 16
-#define EDGE_LEDS 63
+#define EDGE_LEDS 71
 #define RGB_LEDS 35
 #define SLOT_NONE 0xFFFFu
 

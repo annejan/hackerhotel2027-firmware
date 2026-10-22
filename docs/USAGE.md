@@ -303,9 +303,9 @@ on the repair pile. Tap **B** to try that step once more. KEY fails after
 20 s and USB after 10 s; the UART log says what was missing
 (`factory test: FAIL at KEY: missing: < . A .`).
 
-The IR step needs the IR LED and the receiver on the board. Since
-hardware commit 21c2f38 they are 37 mm apart (the LED above the centre,
-the receiver below it), both facing forward, so the badge hears itself
+The IR step needs the IR LED and the receiver on the board. They are
+36 mm apart (the LED straight above the centre, the receiver below it),
+both facing forward, so the badge hears itself
 only through a reflection. The prototypes will show whether a bare board
 does. If it does not, a hand in front is the test; B on `IR?` is for when
 the organisers decide to pass IR untested (the UART log says `ir: passed

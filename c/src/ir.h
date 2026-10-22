@@ -1,4 +1,4 @@
-/* Infrared between badges: the IR LED D316 (anode on VCC through R37,
+/* Infrared between badges: the IR LED D315 (anode on VCC through R32,
  * 200 ohm; cathode PB21, low = on) and the 38 kHz receiver CGQ1 (on VCC
  * now; output on PB19, low while it sees carrier). Packet format in
  * irproto.h.

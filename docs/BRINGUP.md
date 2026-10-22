@@ -93,14 +93,14 @@ Start at the lowest brightness (`level 0` on the console).
 - CHRG (PB22) and VBUS (PC3): the PWR step logs `power: USB (PC3
   high), charging (CHRG low)`.
 - With USB in and the grid at full brightness, measure VBUS − VCC (the
-  drop over D315). PC3 sees VBUS directly while the chip runs on VCC,
+  drop over D316). PC3 sees VBUS directly while the chip runs on VCC,
   and the datasheet allows only VDD + 0.3 V on a pin; this measurement
   sizes the series resistor proposed for PC3.
-- Scope VCC at C5 or C6 on battery, with every LED on at full
+- Scope VCC at C4 or C5 on battery, with every LED on at full
   brightness (the bring-up test's ALL step after `level 4`): each LED
   row pulls up to 24 columns from VCC, 2930 times a second, and since
-  hardware 1ce1163 VCC has only those two 100 nF next to the chip (C4
-  is out). Note the ripple, and whether the chip resets or the USB
+  hardware 1ce1163 VCC has only those two 100 nF, one per VDD pin (the
+  third went). Note the ripple, and whether the chip resets or the USB
   drops out.
 
 ## 6. Flash store
@@ -132,7 +132,7 @@ IR timer's complementary output would go if it were enabled.
 
 The IR step counts the packets the badge hears from itself (`ir: heard
 3 of 3 sent`). The IR LED (above the centre) and the receiver (below
-it) are 37 mm apart, both facing forward, so the echo is a reflection:
+it) are 36 mm apart, both facing forward, so the echo is a reflection:
 if it hears nothing, hold a hand or a sheet of paper a few cm in front
 and note how far away it still works. After that, two badges: B on the
 name tag sends your name, the other badge greets you and answers. Then

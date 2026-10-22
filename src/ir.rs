@@ -2,7 +2,7 @@
 //! runs free for the main loop (main.rs `ticks()`), so sending uses TIM3
 //! where the C uses the SysTick compare.
 //!
-//! Send: the LED's anode is on VCC through R37 (200 ohm, about 15 mA) and
+//! Send: the LED's anode is on VCC through R32 (200 ohm, about 15 mA) and
 //! its cathode on PB21, so it is on while PB21 is low (hardware commit
 //! 0986add). TIM2 channel 1 makes the 38 kHz carrier (1/3 duty) there,
 //! output inverted so PB21 idles high; TIM2_RM = 001 puts CH1 on PB21
@@ -193,7 +193,7 @@ impl Ir {
         wr32(AFIO_PCFR1, pcfr1 | 0b001 << 18);
 
         // PB21 high first (LED off) and alternate push-pull (0b1011), PB19
-        // floating input (R35 pulls it up), PB23 (no longer used) input
+        // floating input (R27 pulls it up), PB23 (no longer used) input
         // with pull-up
         wr32(GPIOB + GPIO_BSXR, 1 << (LED_PIN - 16) | 1 << (23 - 16));
         let cfg = rd32(GPIOB + GPIO_CFGXR) & !0xF0F0_F000;

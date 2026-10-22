@@ -1,6 +1,6 @@
 /* IR send and receive.
  *
- * Send: the LED's anode is on VCC through R37 (200 ohm, about 15 mA) and
+ * Send: the LED's anode is on VCC through R32 (200 ohm, about 15 mA) and
  * its cathode on PB21, so the LED is on while PB21 is low (hardware commit
  * 0986add; it used to hang off PB23). TIM2 channel 1 makes the 38 kHz
  * carrier (1/3 duty) there, output inverted, so PB21 idles high and the
@@ -102,7 +102,7 @@ void ir_init(void)
     TIM2->BDTR = TIM_MOE;
     TIM2->SWEVGR = TIM_UG;
     /* PB21 high first (LED off) and alternate push-pull (0b1011), PB19
-     * floating input (R35 pulls it up), PB23 (no longer used) input with
+     * floating input (R27 pulls it up), PB23 (no longer used) input with
      * pull-up */
     GPIOB->BSXR = 1u << (LED_PIN - 16) | 1u << (23 - 16);
     GPIOB->CFGXR = (GPIOB->CFGXR & ~0xF0F0F000u) | 0x80B04000u;

@@ -79,7 +79,7 @@ impl Uart {
             let pcfr1 = read_volatile(AFIO_PCFR1 as *const u32);
             write_volatile(AFIO_PCFR1 as *mut u32, pcfr1 | 0b11 << 10);
             // PB16 alternate push-pull 50 MHz (0b1011), PB17 floating input
-            // (R34 pulls it up)
+            // (R36 pulls it up)
             let cfg = read_volatile(GPIOB_CFGXR as *const u32);
             write_volatile(GPIOB_CFGXR as *mut u32, (cfg & !0xFF) | 0x4B);
         }

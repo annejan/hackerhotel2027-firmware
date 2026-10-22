@@ -5,7 +5,7 @@ Uses the real board: LED positions come from the KiCad PCB (via pcbnew) and the
 background is a KiCad 3D render of the top side, dimmed to look like a dark room.
 
   208 mono 0402 LEDs   17x16 octagonal grid in the centre, 2 mm pitch
-   63 mono 0402 LEDs   following the board outline (71 before 1ce1163)
+   71 mono 0402 LEDs   following the board outline
    35 RGB 1515 LEDs    7 per arm
 
 Usage:

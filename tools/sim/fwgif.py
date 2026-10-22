@@ -7,7 +7,7 @@
 
 An output ending in .mp4 makes an H.264 video instead of a GIF.
 
-Each recorded frame is the grid (16 x 17), the outline (63 LEDs on the current board), the RGB LEDs
+Each recorded frame is the grid (16 x 17), the outline (71 LEDs on the current board), the RGB LEDs
 by (arm, rank) (35 x 3), a byte of button state (bits 0-3 held, 4-7 pressed)
 and the brightness, as fwsim's dump() writes them.
 """

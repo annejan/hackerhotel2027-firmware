@@ -47,7 +47,7 @@ void uart_init(void)
     RCC->APB2PCENR |= RCC_IOPBEN | RCC_AFIOEN;
     RCC->APB1PCENR |= RCC_USART3EN;
     AFIO->PCFR1 = (AFIO->PCFR1 & ~AFIO_PCFR1_USART3_REMAP) | AFIO_PCFR1_USART3_REMAP; /* = 3 */
-    /* PB16 alternate push-pull 50 MHz (0b1011), PB17 floating input (R34
+    /* PB16 alternate push-pull 50 MHz (0b1011), PB17 floating input (R36
      * pulls it up) */
     GPIOB->CFGXR = (GPIOB->CFGXR & ~0xFFu) | 0x4Bu;
     USART3->BRR = (uint16_t)((SystemCoreClock + BAUD / 2) / BAUD); /* USART3 runs on HCLK */
